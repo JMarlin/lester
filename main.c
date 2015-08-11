@@ -36,10 +36,10 @@ int main(int argc, char* argv[]) {
 
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
-    int fov_angle;
+    int fov_angle, i;
     float step = 0.01;
-    point points[4];
-    vertex vertexes[4];
+    point points[8];
+    vertex vertexes[8];
 
     printf("FOV angle:");
     scanf("%d", &fov_angle);
@@ -69,34 +69,48 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    vertexes[0].x = -1.0;
-    vertexes[0].y = 1.0;
-    vertexes[1].x = 1.0;
-    vertexes[1].y = 1.0;
-    vertexes[2].x = 1.0;
-    vertexes[2].y = -1.0;
-    vertexes[3].x = -1.0;
-    vertexes[3].y = -1.0;
+    vertexes[0].x = -0.8;
+    vertexes[0].y = 1.2;
+    vertexes[1].x = 1.2;
+    vertexes[1].y = 1.2;
+    vertexes[2].x = 1.2;
+    vertexes[2].y = -0.8;
+    vertexes[3].x = -0.8;
+    vertexes[3].y = -0.8;
     vertexes[0].z = vertexes[1].z = vertexes[2].z = vertexes[3].z = 1.0;
+
+	vertexes[4].x = -0.8;
+    vertexes[4].y = 1.2;
+    vertexes[5].x = 1.2;
+    vertexes[5].y = 1.2;
+    vertexes[6].x = 1.2;
+    vertexes[6].y = -0.8;
+    vertexes[7].x = -0.8;
+    vertexes[7].y = -0.8;
+    vertexes[4].z = vertexes[5].z = vertexes[6].z = vertexes[7].z = 3.0;
 
     while(1) {
 
         vertexes[0].z += step;
         vertexes[1].z = vertexes[2].z = vertexes[3].z = vertexes[0].z;
+        
+        vertexes[4].z += step;
+        vertexes[5].z = vertexes[6].z = vertexes[7].z = vertexes[4].z;
 
-        project(&vertexes[0], &points[0]);
-        project(&vertexes[1], &points[1]);
-        project(&vertexes[2], &points[2]);
-        project(&vertexes[3], &points[3]);
+		for(i = 0; i < 8; i++)
+        	project(&vertexes[i], &points[i]);
 
         SDL_SetRenderDrawColor(renderer, 0x0, 0x0, 0x0, 0xFF);
         SDL_RenderClear(renderer);
         SDL_SetRenderDrawColor(renderer, 0xFF, 0x0, 0x0, 0xFF);
-        SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[0].x), TO_SCREEN_Y(points[0].y), TO_SCREEN_X(points[1].x), TO_SCREEN_Y(points[1].y));
-        SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[1].x), TO_SCREEN_Y(points[1].y), TO_SCREEN_X(points[2].x), TO_SCREEN_Y(points[2].y));
-        SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[2].x), TO_SCREEN_Y(points[2].y), TO_SCREEN_X(points[3].x), TO_SCREEN_Y(points[3].y));
-        SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[3].x), TO_SCREEN_Y(points[3].y), TO_SCREEN_X(points[0].x), TO_SCREEN_Y(points[0].y));
-
+        
+        for(i = 0; i < 4; i++) {
+        	
+        	SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[i].x), TO_SCREEN_Y(points[i].y), TO_SCREEN_X(points[((i+1)%4)].x), TO_SCREEN_Y(points[((i+1)%4)].y));
+        	SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[i+4].x), TO_SCREEN_Y(points[i+4].y), TO_SCREEN_X(points[((i+1)%4)+4].x), TO_SCREEN_Y(points[((i+1)%4)+4].y));
+        	SDL_RenderDrawLine(renderer, TO_SCREEN_X(points[i].x), TO_SCREEN_Y(points[i].y), TO_SCREEN_X(points[i+4].x), TO_SCREEN_Y(points[i+4].y));
+        }
+        
         if(vertexes[0].z >= 2.0 && step > 0)
             step = -0.01;
 
@@ -104,6 +118,7 @@ int main(int argc, char* argv[]) {
             step = 0.01;
 
         SDL_RenderPresent(renderer);
+        SDL_Delay(20);
     }
 
     SDL_Delay(5000);
