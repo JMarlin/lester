@@ -1,0 +1,12 @@
+OBJS = main.c
+CC = gcc
+WIN_INCLUDE_PATHS = -IC:\minglibs\include\SDL2
+WIN_LIB_PATHS = -LC:\minglibs\lib
+COMPILER_FLAGS = -w
+LINKER_FLAGS = -lSDL2main -lSDL2
+WIN_LINKER_FLAGS = -lmingw32 $(LINKER_FLAGS)
+TARGET = lester
+WIN_TARGET = $(TARGET).exe
+
+win : $(OBJS)
+	$(CC) $(OBJS) $(WIN_INCLUDE_PATHS) $(WIN_LIB_PATHS) $(COMPILER_FLAGS) $(WIN_LINKER_FLAGS) -o $(TARGET)
