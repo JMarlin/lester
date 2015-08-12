@@ -215,16 +215,8 @@ object *new_object() {
 object *new_cube(float s, color *c) {
     
     object* ret_obj = new_object();
-    
-    if(!ret_obj) {
-        
-        printf("[new_cube] object allocation failed\n");
-        return ret_obj;
-    }
-    
-    printf("[new_cube] new object allocated\n");
-    
-    triangle* temp_tri;
+    int i;
+        triangle *temp_tri;
     vertex temp_v[3];
     float half_s = s/2.0;
     float points[][3] = {
@@ -251,8 +243,15 @@ object *new_cube(float s, color *c) {
                   {7, 4, 0},
                   {0, 3, 7}
               };
-    int i;
     
+    if(!ret_obj) {
+        
+        printf("[new_cube] object allocation failed\n");
+        return ret_obj;
+    }
+    
+    printf("[new_cube] new object allocated\n");
+        
     if(!ret_obj)
         return ret_obj;
     
@@ -434,8 +433,10 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
     int x1, y1, dx1, dy1, sx1, err1, e21;
     int x2, y2, dx2, dy2, sx2, err2, e22;
     int x3, y3, dx3, dy3, sx3, err3, e23;
+    int endy;
     point p[3];
     point split;
+    float zval[2];
     float vec_a[3];
     float vec_b[3];
     float cross[3];
@@ -485,6 +486,7 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
         
         project(&(tri->v[i]), &p[i]);
         //printf("%f", p[i].y);
+        zval[i] = TO_SCREEN_Z(tri->v[i].z);
         p[i].x = TO_SCREEN_X(p[i].x);
         p[i].y = TO_SCREEN_Y(p[i].y);
         //printf("(%f) ", p[i].y);
@@ -532,6 +534,7 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
     y2 = (int)p[s].y;
     x3 = (int)p[f].x;
     y3 = (int)p[f].y;
+    endy = (int)p[t].y;
         
     SDL_SetRenderDrawColor(rend, (unsigned char)r, (unsigned char)g, (unsigned char)b, 0xFF);
     
@@ -544,7 +547,7 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
         //stopping if we hit an increase in our y-value
         while(1) {
             
-            if(y3 == (int)p[t].y) {
+            if(y3 == endy) {
                 
                 done_2 = 1;
                 break;
@@ -609,7 +612,7 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
                         
             while(1) {
                 
-                if(y2 == (int)p[t].y) {
+                if(y2 == endy) {
                     
                     done_2 = 1;
                     break;
@@ -723,6 +726,7 @@ int main(int argc, char* argv[]) {
 
         SDL_SetRenderDrawColor(renderer, 0x0, 0x0, 0x0, 0xFF);
         SDL_RenderClear(renderer);
+        clear_zbuf();
         
         render_object(cube, renderer);     
         
