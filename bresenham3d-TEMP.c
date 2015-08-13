@@ -62,7 +62,7 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
 
     
     int i;
-    int x[3], y[3], z[3];
+    point p[3];
     float zval[2];
     float vec_a[3];
     float vec_b[3];

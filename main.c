@@ -13,7 +13,7 @@
 #define PI 3.141592653589793
 #define TO_SCREEN_Y(y) ((int)((SCREEN_HEIGHT-(y*SCREEN_HEIGHT))/2.0))
 #define TO_SCREEN_X(x) ((int)((SCREEN_WIDTH+(x*SCREEN_HEIGHT))/2.0))
-#define TO_SCREEN_Z(z) ((unsigned char)((z) > SCREEN_DEPTH ? 0 : (255.0 - ((z*255.0)/SCREEN_DEPTH))))
+#define TO_SCREEN_Z(z) ((unsigned char)((z) > SCREEN_DEPTH ? 255 : ((z*255)/SCREEN_DEPTH)))
 #define DEG_TO_RAD(a) ((((float)a)*PI)/180.0)
 
 float focal_length;
@@ -23,6 +23,12 @@ typedef struct point {
     float x;
     float y;
 } point;
+
+typedef struct screen_point {
+    int x;
+    int y;
+    unsigned char z;
+} screen_point;
 
 typedef struct color {
     unsigned char r;
@@ -63,7 +69,7 @@ typedef struct object {
 
 void clear_zbuf() {
     
-    memset((void*)zbuf, 0, SCREEN_PIXELS);  
+    memset((void*)zbuf, 255, SCREEN_PIXELS);  
 }
 
 int init_zbuf() {
@@ -419,24 +425,65 @@ void rotate_object_z_local(object* obj, float angle) {
     translate_object(obj, oldx, oldy, oldz);
 }
 
-void project(vertex* v, point* p) {
+void project(vertex* v, screen_point* p) {
 
     float delta = (v->z == 0.0) ? 1.0 : (focal_length/v->z);
 
-    p->x = v->x * delta;
-    p->y = v->y * delta;
+    p->x = TO_SCREEN_X(v->x * delta);
+    p->y = TO_SCREEN_Y(v->y * delta);
+    p->z = TO_SCREEN_Z(v->z);
+}
+
+//Draw an rgb-colored line along the scanline from x=x1 to x=x2, interpolating
+//z-values and only drawing the pixel if the interpolated z-value is less than
+//the value already written to the z-buffer
+void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
+	    
+	int dx = abs(x1 - x0);
+    int sx = x0 < x1 ? 1 : -1;
+	int dz = abs(z1 - z0);
+    int sz = z0 < z1 ? 1 : -1;
+	int err = (dx > dz ? dx : dz) / 2;
+    int te;
+    int z_addr;
+	    
+	while(1) {
+        
+        //Check the z buffer and draw the point
+        z_addr = scanline * SCREEN_WIDTH + x0;
+        
+        if(z0 != 255 && z0 < zbuf[z_addr]) {
+            
+            //Uncomment the below to view the depth buffer
+            //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
+            SDL_RenderDrawPoint(r, x0, scanline);
+            zbuf[z_addr] = z0;
+        }
+        
+        //Do the next step of z-interpolation along x
+		if(x0 == x1)
+            return;
+            
+		te = err;
+        
+		if(te > -dx) {
+            
+            err -= dz;
+            x0 += sx;
+        } 
+        
+		if(te < dz) {
+            
+            err += dx;
+            z0 += sz; 
+        } 
+	}
 }
 
 void render_triangle(triangle* tri, SDL_Renderer *rend) {
     
     int i;
-    int x1, y1, dx1, dy1, sx1, err1, e21;
-    int x2, y2, dx2, dy2, sx2, err2, e22;
-    int x3, y3, dx3, dy3, sx3, err3, e23;
-    int endy;
-    point p[3];
-    point split;
-    float zval[2];
+    screen_point p[3];
     float vec_a[3];
     float vec_b[3];
     float cross[3];
@@ -444,7 +491,17 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
     float normal_angle;
     float lighting_pct;
     float r, g, b;
-    unsigned char f, s, t, e, done_1, done_2;
+    unsigned char f, s, t, e;
+    int dx_x1, sx_x1, dy_x1, sy_x1,	err_x1,	te_x1;
+	int dx_z1, sx_z1, dy_z1, sy_z1,	err_z1,	te_z1;
+	int dx_x2, sx_x2, dy_x2, sy_x2,	err_x2,	te_x2;
+	int dx_z2, sx_z2, dy_z2, sy_z2,	err_z2,	te_z2;
+	int dx_x3, sx_x3, dy_x3, sy_x3,	err_x3,	te_x3;
+	int dx_z3, sx_z3, dy_z3, sy_z3,	err_z3,	te_z3;
+	int current_s;
+	int cur_x1, cur_x2, cur_x3;
+	int cur_z1, cur_z2, cur_z3;
+    int x1y, x2y, x3y, z1y, z2y, z3y;
     
     //Calculate the surface normal
     //subtract 3 from 2 and 1, translating it to the origin
@@ -470,9 +527,13 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
     normal_angle = acos(-cross[2]);
     
     //If the normal is facing away from the camera, don't bother drawing it
-    if(normal_angle >= (PI/2))
+    if(normal_angle >= (PI/2)) {
+        
         return;
+    }
     
+    //Calculate the shading color based on the first vertex color and the
+    //angle between the camera and the surface normal
     lighting_pct = ((2.0*(PI - normal_angle)) / PI) - 1.0;
     r = tri->v[0].c->r * lighting_pct;
     r = r > 255.0 ? 255 : r;     
@@ -480,18 +541,11 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
     g = g > 255.0 ? 255 : g;
     b = tri->v[0].c->b * lighting_pct;
     b = b > 255.0 ? 255 : b;
+    SDL_SetRenderDrawColor(rend, (unsigned char)r, (unsigned char)g, (unsigned char)b, 0xFF);
     
-    //Also perform a TO_SCREEN_Z of the z-value to be used in z-buffer calculations
-    for(i = 0; i < 3; i++) {
-        
+    //Move the vertices from world space to screen space
+    for(i = 0; i < 3; i++) 
         project(&(tri->v[i]), &p[i]);
-        //printf("%f", p[i].y);
-        zval[i] = TO_SCREEN_Z(tri->v[i].z);
-        p[i].x = TO_SCREEN_X(p[i].x);
-        p[i].y = TO_SCREEN_Y(p[i].y);
-        //printf("(%f) ", p[i].y);
-    }
-    //printf("\n");
     
     //sort vertices by ascending y
     f = 0; s = 1; t = 2;
@@ -510,133 +564,202 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
         s = f;
         f = e;
     }
-    
-    //printf("Ordered ys: %f, %f, %f\n", p[f].y, p[s].y, p[t].y);
-    
-    //Set up bresenham starting values
-    dx1  = abs((int)p[s].x - (int)p[f].x);
-    sx1  = (int)p[f].x < (int)p[s].x ? 1 : -1;
-    dy1  = abs((int)p[s].y - (int)p[f].y);
-    err1 = (dx1 > dy1 ? dx1 : -dy1)/2;
-    dx2  = abs((int)p[t].x - (int)p[s].x);
-    sx2  = (int)p[s].x < (int)p[t].x ? 1 : -1;
-    dy2  = abs((int)p[t].y - (int)p[s].y);
-    err2 = (dx2 > dy2 ? dx2 : -dy2)/2;
-    dx3  = abs((int)p[t].x - (int)p[f].x);
-    sx3  = (int)p[f].x < (int)p[t].x ? 1 : -1;
-    dy3  = abs((int)p[t].y - (int)p[f].y);
-    err3 = (dx3 > dy3 ? dx3 : -dy3)/2;
-    done_1 = 0;
-    done_2 = 0;
-    x1 = (int)p[f].x;
-    y1 = (int)p[f].y;
-    x2 = (int)p[s].x;
-    y2 = (int)p[s].y;
-    x3 = (int)p[f].x;
-    y3 = (int)p[f].y;
-    endy = (int)p[t].y;
-        
-    SDL_SetRenderDrawColor(rend, (unsigned char)r, (unsigned char)g, (unsigned char)b, 0xFF);
-    
-    //Make this also interpolate the z-depth of the edges between the vertices, as calculated by TO_SCREEN_Z
-    while(!done_2) {
-           
-        //printf("outer\n");   
-                
-        //Here, we do the loop through the line from topmost to third
-        //stopping if we hit an increase in our y-value
-        while(1) {
-            
-            if(y3 == endy) {
-                
-                done_2 = 1;
-                break;
-            }
-            
-            e23 = err3;
-            
-            if(e23 > -dx3) {
-                
-                err3 -= dy3;
-                x3 += sx3;
-            }
-            
-            if(e23 < dy3) {
-                
-                err3 += dx3;
-                y3 += 1;
-                break;
-            }
-        }
-        
-        //If we haven't finished first-to-second
-        if(!done_1 || done_2) {
-                
-            //printf("in 1 %d, %d\n", y1, y2);
-                
-            //Drawing from first topmost to second until we hit a 
-            //spot where our y-value changes
-            while(1) {
-                
-                if(y1 == y2 || done_2) {
                     
-                    done_1 = 1;
-                    break;
-                }
-                
-                e21 = err1;
-                
-                if(e21 > -dx1) {
-                    
-                    err1 -= dy1;
-                    x1 += sx1;
-                }
-                
-                if(e21 < dy1) {
-                    
-                    err1 += dx1;
-                    y1 += 1;
-                    //Replace this with a function which draws a horizontal line while interpolating between two z-buffer values
-                    SDL_RenderDrawLine(rend, x1, y1, x3, y3);
-                    break;
-                }
-            }
-        }
-        
-        //Doing this instead of an else makes sure
-        //we fall through as soon as we finish the 
-        //first line
-        if(done_1 || done_2) {
-                   
-            //printf("in 2 %d, %f\n", y2, p[t].y);       
-                        
-            while(1) {
-                
-                if(y2 == endy) {
-                    
-                    done_2 = 1;
-                    break;
-                }
-                
-                e22 = err2;
-                    
-                if(e22 > -dx2) {
-                    
-                    err2 -= dy2;
-                    x2 += sx2;
-                }
-                
-                if(e22 < dy2) {
-                    
-                    err2 += dx2;
-                    y2 += 1;
-                    //Replace this with a function which draws a horizontal line while interpolating between two z-buffer values
-                    SDL_RenderDrawLine(rend, x2, y2, x3, y3);
-                    break;
-                }
-            }
-        }
-    }
+    //Now that they're sorted, calculate the bresenham values for each line
+	//For the x of the first line ([x1, y1, z1] -> [x2, y2, z2])
+	dx_x1 = abs(p[s].x - p[f].x);
+	sx_x1 = p[f].x < p[s].x ? 1 : -1;
+	dy_x1 = abs(p[s].y - p[f].y);
+	sy_x1 = p[f].y < p[s].y ? 1 : -1; 
+	err_x1 = (dx_x1 > dy_x1 ? dx_x1 : -dy_x1) / 2;
+	te_x1;
+	
+	//For the z of the first line ([x1, y1, z1] -> [x2, y2, z2])
+	dx_z1 = abs(p[s].z - p[f].z);
+	sx_z1 = p[f].z < p[s].z ? 1 : -1;
+	dy_z1 = abs(p[s].y - p[f].y);
+	sy_z1 = p[f].y < p[s].y ? 1 : -1; 
+	err_z1 = (dx_z1 > dy_z1 ? dx_z1 : -dy_z1) / 2;
+	te_z1;
+	
+	//For the x of the second line ([x2, y2, z2] -> [x3, y3, z3])
+	dx_x2 = abs(p[t].x - p[s].x);
+	sx_x2 = p[s].x < p[t].x ? 1 : -1;
+	dy_x2 = abs(p[t].y - p[s].y);
+	sy_x2 = p[s].y < p[t].y ? 1 : -1; 
+	err_x2 = (dx_x2 > dy_x2 ? dx_x2 : -dy_x2) / 2;
+	te_x2;
+	
+	//For the z of the second line ([x2, y2, z2] -> [x3, y3, z3])
+	dx_z2 = abs(p[t].z - p[s].z);
+	sx_z2 = p[s].z < p[t].z ? 1 : -1;
+	dy_z2 = abs(p[t].y - p[s].y);
+	sy_z2 = p[s].y < p[t].y ? 1 : -1; 
+	err_z2 = (dx_z2 > dy_z2 ? dx_z2 : -dy_z2) / 2;
+	te_z2;
+	
+	//For the x of the third line ([x1, y1, z1] -> [x3, y3, z3])
+	dx_x3 = abs(p[t].x - p[f].x);
+	sx_x3 = p[f].x < p[t].x ? 1 : -1;
+	dy_x3 = abs(p[t].y - p[f].y);
+	sy_x3 = p[f].y < p[t].y ? 1 : -1; 
+	err_x3 = (dx_x3 > dy_x3 ? dx_x3 : -dy_x3) / 2;
+	te_x3;
+	
+	//For the z of the third line ([x1, y1, z1] -> [x3, y3, z3])
+	dx_z3 = abs(p[t].z - p[f].z);
+	sx_z3 = p[f].z < p[t].z ? 1 : -1;
+	dy_z3 = abs(p[t].y - p[f].y);
+	sy_z3 = p[f].y < p[t].y ? 1 : -1; 
+	err_z3 = (dx_z3 > dy_z3 ? dx_z3 : -dy_z3) / 2;
+	te_z3;
+	
+	//Set the important scanlines
+	current_s = p[f].y;
+	cur_x1 = p[f].x;
+	cur_z1 = p[f].z;
+	cur_x2 = p[s].x;
+	cur_z2 = p[s].z;;
+	cur_x3 = p[f].x;
+	cur_z3 = p[f].z;
+	
+	while(current_s < p[t].y) {
+		
+		//Run either line 1 or line 2
+		if(current_s < p[s].y) {
+			
+			//Draw the current scanline from line 1 to line 3
+			draw_scanline(rend, current_s, cur_x1, cur_z1, cur_x3, cur_z3);
+			
+			//Run the x of line 1 until we've stepped y
+			while(1) {
+				
+				te_x1 = err_x1;
+				
+				if (te_x1 > -dx_x1) {
+					
+					//x1-increase
+					err_x1 -= dy_x1;
+					cur_x1 += sx_x1;
+				}
+				
+				if (te_x1 < dy_x1) { 
+					
+					//s-increase
+					err_x1 += dx_x1;
+					break;
+				}
+			}
+			
+			//Run the z of line 1 until we've stepped y
+			while(1) {
+				
+				te_z1 = err_z1;
+				
+				if (te_z1 > -dx_z1) {
+					
+					//z1-increase
+					err_z1 -= dy_z1;
+					cur_z1 += sx_z1;
+				}
+				
+				if (te_z1 < dy_z1) { 
+					
+					//s-increase
+					err_z1 += dx_z1;
+					break;
+				}
+			}
+		} else {
+			
+			//Draw the current scanline from line 2 to line 3 
+			draw_scanline(rend, current_s, cur_x2, cur_z2, cur_x3, cur_z3);
+			
+			//Run the x of line 2 until we've stepped y
+			while(1) {
+				
+				te_x2 = err_x2;
+				                
+				if (te_x2 > -dx_x2) {
+					
+					//x2-increase
+					err_x2 -= dy_x2;
+					cur_x2 += sx_x2;
+				}
+				
+				if (te_x2 < dy_x2) { 
+					
+					//s-increase
+					err_x2 += dx_x2;
+					break;
+				}
+			}
+			
+			//Run the z of line 2 until we've stepped y
+			while(1) {
+				
+				te_z2 = err_z2;
+                				
+				if (te_z2 > -dx_z2) {
+					
+					//z2-increase
+					err_z2 -= dy_z2;
+					cur_z2 += sx_z2;
+				}
+				
+				if (te_z2 < dy_z2) { 
+					
+					//s-increase
+					err_z2 += dx_z2;
+					break;
+				}
+			}
+		}
+
+		//Run line 3		
+		//Run the x of line 3 until we've stepped y
+		while(1) {
+			
+			te_x3 = err_x3;
+			
+			if (te_x3 > -dx_x3) {
+				
+				//x3-increase
+				err_x3 -= dy_x3;
+				cur_x3 += sx_x3;
+			}
+			
+			if (te_x3 < dy_x3) { 
+				
+				//s-increase
+				err_x3 += dx_x3;
+				break;
+			}
+		}
+		
+		//Run the z of line 3 until we've stepped y
+		while(1) {
+			
+			te_z3 = err_z3;
+			
+			if (te_z3 > -dx_z3) {
+				
+				//z3-increase
+				err_z3 -= dy_z3;
+				cur_z3 += sx_z3;
+			}
+			
+			if (te_z3 < dy_z3) { 
+				
+				//s-increase
+				err_z3 += dx_z3;
+				break;
+			}
+		}
+		        
+		//Move to the next scanline		
+		current_s++;
+	}
 }
 
 void render_object(object *obj, SDL_Renderer *r) {
@@ -645,7 +768,7 @@ void render_object(object *obj, SDL_Renderer *r) {
     int i;
     
     list_for_each(&(obj->tri_list), item, i) {
-     
+        
         render_triangle((triangle*)item->payload, r);
     }
 }
@@ -724,11 +847,11 @@ int main(int argc, char* argv[]) {
         rotate_object_x_local(cube, 1);
         rotate_object_z_local(cube, 1);
 
-        SDL_SetRenderDrawColor(renderer, 0x0, 0x0, 0x0, 0xFF);
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
         SDL_RenderClear(renderer);
         clear_zbuf();
         
-        render_object(cube, renderer);     
+        render_object(cube, renderer);  
         
         if(i >= 1.0 && step > 0)
             step = -0.01;
