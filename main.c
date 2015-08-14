@@ -1,4 +1,4 @@
-#include <SDL.h>
+#include "SDL.h"
 #include <stdio.h>
 #include <math.h>
 #include <memory.h>
@@ -6,14 +6,14 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 #define SCREEN_PIXELS SCREEN_WIDTH * SCREEN_HEIGHT
-#define SCREEN_DEPTH 5.0
+#define SCREEN_DEPTH 10.0
 
 //Convert a point scaled such that 1.0, 1.0 is at the upper right-hand
 //corner of the screen and -1.0, -1.0 is at the bottom right to pixel coords
 #define PI 3.141592653589793
 #define TO_SCREEN_Y(y) ((int)((SCREEN_HEIGHT-(y*SCREEN_HEIGHT))/2.0))
 #define TO_SCREEN_X(x) ((int)((SCREEN_WIDTH+(x*SCREEN_HEIGHT))/2.0))
-#define TO_SCREEN_Z(z) ((unsigned char)((z) > SCREEN_DEPTH ? 255 : ((z*255)/SCREEN_DEPTH)))
+#define TO_SCREEN_Z(z) ((unsigned char)((z) > SCREEN_DEPTH || z < 0 ? 255 : ((z*255.0)/SCREEN_DEPTH)))
 #define DEG_TO_RAD(a) ((((float)a)*PI)/180.0)
 
 float focal_length;
@@ -427,7 +427,7 @@ void rotate_object_z_local(object* obj, float angle) {
 
 void project(vertex* v, screen_point* p) {
 
-    float delta = (v->z == 0.0) ? 1.0 : (focal_length/v->z);
+    float delta = (v->z <= 0.0) ? 1.0 : (focal_length/v->z);
 
     p->x = TO_SCREEN_X(v->x * delta);
     p->y = TO_SCREEN_Y(v->y * delta);
@@ -438,27 +438,37 @@ void project(vertex* v, screen_point* p) {
 //z-values and only drawing the pixel if the interpolated z-value is less than
 //the value already written to the z-buffer
 void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
+
+    int dx, sx, dz, sz, err, te, z_addr;	
+	   
+    //don't draw off the screen
+    if(scanline >= SCREEN_HEIGHT || scanline < 0)
+    	return;
 	    
-	int dx = abs(x1 - x0);
-    int sx = x0 < x1 ? 1 : -1;
-	int dz = abs(z1 - z0);
-    int sz = z0 < z1 ? 1 : -1;
-	int err = (dx > dz ? dx : dz) / 2;
-    int te;
-    int z_addr;
-	    
-	while(1) {
+    dx = abs(x1 - x0);
+    sx = x0 < x1 ? 1 : -1;
+    dz = abs(z1 - z0);
+    sz = z0 < z1 ? 1 : -1;
+    err = (dx > dz ? dx : dz) / 2;
+    te;
+    z_addr;
+	   
+    while(1) {
         
-        //Check the z buffer and draw the point
-        z_addr = scanline * SCREEN_WIDTH + x0;
         
-        if(z0 != 255 && z0 < zbuf[z_addr]) {
+	if(x0 < SCREEN_WIDTH && x0 >= 0) {
+        
+	    //Check the z buffer and draw the point
+            z_addr = scanline * SCREEN_WIDTH + x0;
+	
+	    if(z0 < zbuf[z_addr]) {
             
-            //Uncomment the below to view the depth buffer
-            //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
-            SDL_RenderDrawPoint(r, x0, scanline);
-            zbuf[z_addr] = z0;
-        }
+                //Uncomment the below to view the depth buffer
+                //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
+                SDL_RenderDrawPoint(r, x0, scanline);
+                zbuf[z_addr] = z0;
+            }
+	}
         
         //Do the next step of z-interpolation along x
 		if(x0 == x1)
@@ -477,7 +487,9 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
             err += dx;
             z0 += sz; 
         } 
-	}
+    }
+    
+    printf("done\n");
 }
 
 void render_triangle(triangle* tri, SDL_Renderer *rend) {
@@ -503,6 +515,10 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
 	int cur_z1, cur_z2, cur_z3;
     int x1y, x2y, x3y, z1y, z2y, z3y;
     
+    //Don't draw the triangle if it's offscreen
+    if(tri->v[0].z < 0 && tri->v[1].z < 0 && tri->v[2].z < 0)
+        return;
+    
     //Calculate the surface normal
     //subtract 3 from 2 and 1, translating it to the origin
     vec_a[0] = tri->v[0].x - tri->v[2].x;
@@ -527,11 +543,54 @@ void render_triangle(triangle* tri, SDL_Renderer *rend) {
     normal_angle = acos(-cross[2]);
     
     //If the normal is facing away from the camera, don't bother drawing it
-    if(normal_angle >= (PI/2)) {
-        
-        return;
-    }
+    //if(normal_angle >= (PI/2)) {
+    //    
+    //    return;
+    //}
     
+    //NOTE: We need to do some relatively easy math and clip all triangles to the front and rear planes
+    //should basically be testing each vertex's z component to see if it's less than zero or greater than 
+    //the screen depth and, if so, calculate the intersections of its connecting edges with the respective
+    //planes and create two new vertices at the intersection points. We should then proceed to draw the
+    //two new resultant triangles. 
+    //If two of the three are beyond the same plane, we can replace each with the intersection of their
+    //non-mutual edge and draw a single triangle.
+    //Should be able to do this by performing intersection check on each plane in turn?
+    //We can make this recursive:
+    //begin split_tri (one, two, three)
+    //    count = 0
+    //    check one with back (if out, count++ and mark out) 
+    //    check two with back (if out, count++ and mark out)
+    //    check three with back (if out, count++ and mark out)
+    //    switch count
+    //        1: get new back intersections a and b
+    //           split_tri(a, two, three) //actually make sure we build the right tri
+    //           split_tri(b, two, three) //same note
+    //           return
+    //        2: get new back intersections a and b //different from above for the aforementioned reasons
+    //           split_tri(a, b, three) //same note as always
+    //           return
+    //        0: //do nothing and flow through
+    //    endswitch
+    //    //Could probably shorten this by making two passes at the above while swapping planes
+    //    count = 0
+    //    check one with front (if out, count++ and mark out) 
+    //    check two with front (if out, count++ and mark out)
+    //    check three with front (if out, count++ and mark out)
+    //    switch count
+    //        1: get new front intersections a and b
+    //           split_tri(a, two, three) //actually make sure we build the right tri
+    //           split_tri(b, two, three) //same note
+    //           return
+    //        2: get new front intersections a and b //different from above for the aforementioned reasons
+    //           split_tri(a, b, three) //same note as always
+    //           return
+    //        0: //do nothing and flow through
+    //    endswitch
+    //    //There are no triangles out, so we can pass this one along
+    //    draw_triangle(one, two, three)
+    //end    
+    //
     //Calculate the shading color based on the first vertex color and the
     //angle between the camera and the surface normal
     lighting_pct = ((2.0*(PI - normal_angle)) / PI) - 1.0;
@@ -779,7 +838,7 @@ int main(int argc, char* argv[]) {
     SDL_Renderer* renderer = NULL;
     SDL_Event e;
     int fov_angle;
-    float i = 0, step = 0.01;
+    float i = 0, step = -0.01;
     color *c;
     object *cube;
     int done = 0;
@@ -832,6 +891,9 @@ int main(int argc, char* argv[]) {
     }
 
     translate_object(cube, 0.0, 0.0, 1.0);
+    //rotate_object_y_local(cube, 45);
+    //rotate_object_x_local(cube, 45);
+    //rotate_object_z_local(cube, 45);
 
     while(!done) {
 
@@ -843,9 +905,9 @@ int main(int argc, char* argv[]) {
 
         i += step;
         translate_object(cube, 0.0, 0.0, step);
-        rotate_object_y_local(cube, 1);
-        rotate_object_x_local(cube, 1);
-        rotate_object_z_local(cube, 1);
+        //rotate_object_y_local(cube, 1);
+        //rotate_object_x_local(cube, 1);
+        //rotate_object_z_local(cube, 1);
 
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
         SDL_RenderClear(renderer);
@@ -856,7 +918,7 @@ int main(int argc, char* argv[]) {
         if(i >= 1.0 && step > 0)
             step = -0.01;
 
-        if(i <= 0.0 && step < 0)
+        if(i <= -1.0 && step < 0)
             step = 0.01;
 
         SDL_RenderPresent(renderer);
