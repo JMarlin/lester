@@ -434,9 +434,183 @@ void project(vertex* v, screen_point* p) {
     p->z = TO_SCREEN_Z(v->z);
 }
 
+void render_triangle(triangle* tri, SDL_Renderer *rend) {
+    
+    render_clipped_triangles(r, tri);
+}
+
+void render_clipped_triangles(SDL_Renderer *r, triangle* tri) {    
+    //begin split_tri (one, two, three)
+    //    count = 0
+    //    check one with back (if out, count++ and mark out) 
+    //    check two with back (if out, count++ and mark out)
+    //    check three with back (if out, count++ and mark out)
+    //    switch count
+    //        1: get new back intersections a and b
+    //           split_tri(a, two, three) //actually make sure we build the right tri
+    //           split_tri(b, two, three) //same note
+    //           return
+    //        2: get new back intersections a and b //different from above for the aforementioned reasons
+    //           split_tri(a, b, three) //same note as always
+    //           return
+    //        0: //do nothing and flow through
+    //    endswitch
+    //    //Could probably shorten this by making two passes at the above while swapping planes
+    //    count = 0
+    //    check one with front (if out, count++ and mark out) 
+    //    check two with front (if out, count++ and mark out)
+    //    check three with front (if out, count++ and mark out)
+    //    switch count
+    //        1: get new front intersections a and b
+    //           split_tri(a, two, three) //actually make sure we build the right tri
+    //           split_tri(b, two, three) //same note
+    //           return
+    //        2: get new front intersections a and b //different from above for the aforementioned reasons
+    //           split_tri(a, b, three) //same note as always
+    //           return
+    //        0: //do nothing and flow through
+    //    endswitch
+    //    //There are no triangles out, so we can pass this one along
+    //    draw_triangle(one, two, three)
+    //end  
+
+    int count;
+    int on_second_iteration = 0;
+    int i;
+    float plane_z = 0;
+    unsigned char point_marked[3] = {0, 0, 0};
+    vertex new_point[2]; 
+    int fixed[2];
+    int original;
+    triangle out_tri[2];
+       
+    while(1) {
+        
+        count = 0;
+        
+        //Check each point to see if it's greater than the plane
+        for(i = 0; i < 3; i++)
+            if((on_second_iteration && tri->v[i].y > plane_z) || 
+              (!on_second_iteration && tri->v[i].y < plane_z)) {
+
+                point_marked[i] = 1;
+                count++;
+            }
+            
+        switch(count) {
+            
+            //If all of the vertexes were out of range, 
+            //skip drawing the whole thing entirely
+            case 3:
+                return;
+            
+            case 1:
+                //Figure out what the other two points are
+                fixed[0] = point_marked[0] ? point_marked[1] ? 2 : 1 : 0;
+                fixed[1] = fixed[0] == 0 ? point_marked[1] ? 2 : 1 : fixed[0] == 1 ? point_marked[0] ? 2 : 0 : point_marked[0] ? 1 : 0;
+                original = point_marked[0] ? 0 : point_marked[1] ? 1 : 2;
+                
+                //Calculate the new intersection points 
+                for(i = 0; i < 2; i++) {
+                    
+                    new_point[i].z = plane_z;
+                    new_point[i].x = tri->v[original].x + (((tri->v[original].x - tri->v[fixed[i]].x)*(plane_z - tri->v[original].z))/(tri->v[original].z - tri->v[fixed[i]].z));
+                    new_point[i].y = tri->v[original].y + (((tri->v[original].y - tri->v[fixed[i]].y)*(plane_z - tri->v[original].z))/(tri->v[original].z - tri->v[fixed[i]].z));
+                    new_point[i].c = tri->v[fixed[i]].c;
+                }   
+                
+                //Test/draw the new triangles, maintaining the CW or CCW ordering
+                if(fixed[0] < fixed[1]) {
+                    
+                    //Triangle 1
+                    clone_vertex(&new_point[0], &(out_tri[0].v[0]));
+                    clone_vertex(&(tri->v[fixed[0]]), &(out_tri[0].v[1]));
+                    clone_vertex(&(tri->v[fixed[1]]), &(out_tri[0].v[2]));
+                    
+                    //Triangle 2
+                    clone_vertex(&new_point[1], &(out_tri[1].v[0]));
+                    clone_vertex(&new_point[0], &(out_tri[1].v[1]));
+                    clone_vertex(&(tri->v[fixed[1]]), &(out_tri[1].v[2]));
+                } else {
+                    
+                    //Triangle 1
+                    clone_vertex(&new_point[0], &(out_tri[0].v[0]));
+                    clone_vertex(&(tri->v[fixed[1]]), &(out_tri[0].v[1]));
+                    clone_vertex(&(tri->v[fixed[0]]), &(out_tri[0].v[2]));
+                    
+                    //Triangle 2
+                    clone_vertex(&new_point[1], &(out_tri[1].v[0]));
+                    clone_vertex(&(tri->v[fixed[1]]), &(out_tri[1].v[1]));
+                    clone_vertex(&new_point[0], &(out_tri[1].v[2]));
+                }
+                
+                //output
+                render_clipped_triangles(r, &out_tri[0]);
+                render_clipped_triangles(r, &out_tri[1]);
+                
+                //Exit the function early for dat tail recursion              
+                return;
+            
+            case 2:
+                //Figure out which point we're keeping
+                original = point_marked[0] ? point_marked[1] ? 2 : 1 : 0;
+                fixed[0] = point_marked[0] ? 0 : point_marked[1] ? 1 : 2;
+                fixed[1] = fixed[0] == 0 ? point_marked[1] ? 1 : 2 : fixed[0] == 1 ? point_marked[0] ? 0 : 2 : point_marked[0] ? 0 : 1;
+                            
+                //Calculate the new intersection points 
+                for(i = 0; i < 2; i++) {
+                    
+                    new_point[i].z = plane_z;
+                    new_point[i].x = tri->v[original].x + (((tri->v[original].x - tri->v[fixed[i]].x)*(plane_z - tri->v[original].z))/(tri->v[original].z - tri->v[fixed[i]].z));
+                    new_point[i].y = tri->v[original].y + (((tri->v[original].y - tri->v[fixed[i]].y)*(plane_z - tri->v[original].z))/(tri->v[original].z - tri->v[fixed[i]].z));
+                    new_point[i].c = tri->v[fixed[i]].c;
+                } 
+                
+                //Test/draw the new triangles, maintaining the CW or CCW ordering
+                if(fixed[0] < fixed[1]) {  
+                            
+                    clone_vertex(&new_point[0], &(out_tri[0].v[0]));
+                    clone_vertex(&new_point[1], &(out_tri[0].v[1]));
+                    clone_vertex(&tri->v[original], &(out_tri[0].v[2]));          
+                } else {
+                    
+                    clone_vertex(&new_point[1], &(out_tri[0].v[0]));
+                    clone_vertex(&new_point[0], &(out_tri[0].v[1]));
+                    clone_vertex(&tri->v[original], &(out_tri[0].v[2]));
+                }
+                
+                //output
+                render_clipped_triangles(r, &out_tri[0]);
+                    
+                //Exit the function early for dat tail recursion  
+                return;
+            
+            //If there were no intersections we won't do anything and 
+            //allow execution to flow through
+            case 0:
+            default:
+                break; 
+        }
+
+        //If we hit case 0 both times above, all points on this
+        //triangle lie in the drawable area and we can leave this
+        //clipping loop and flow down to do the drawing of the 
+        //processed triangle         
+        if(on_second_iteration)
+            break;
+        
+        on_second_iteration = 1;
+        plane_z = SCREEN_DEPTH;
+    }    
+    
+    //If we got this far, the triangle is drawable. So we should do that. Or whatever.
+    draw_triangle(r, tri);   
+}
+
 //Draw an rgb-colored line along the scanline from x=x1 to x=x2, interpolating
 //z-values and only drawing the pixel if the interpolated z-value is less than
 //the value already written to the z-buffer
+//Need to add u0, u1, v0, v1, r0, r1, g0, g1, b0, b1 for U,V and RGB interpolation 
 void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
 
     int dx, sx, dz, sz, err, te, z_addr;	
@@ -492,7 +666,7 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
     printf("done\n");
 }
 
-void render_triangle(triangle* tri, SDL_Renderer *rend) {
+void draw_triangle(triangle* tri, SDL_Renderer *rend) {
     
     int i;
     screen_point p[3];
