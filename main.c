@@ -434,7 +434,7 @@ void project(vertex* v, screen_point* p) {
     p->z = TO_SCREEN_Z(v->z);
 }
 
-void render_triangle(triangle* tri, SDL_Renderer *rend) {
+void render_triangle(SDL_Renderer *r, triangle* tri) {
     
     render_clipped_triangles(r, tri);
 }
@@ -662,11 +662,9 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
             z0 += sz; 
         } 
     }
-    
-    printf("done\n");
 }
 
-void draw_triangle(triangle* tri, SDL_Renderer *rend) {
+void draw_triangle(SDL_Renderer *rend, triangle* tri) {
     
     int i;
     screen_point p[3];
@@ -688,7 +686,7 @@ void draw_triangle(triangle* tri, SDL_Renderer *rend) {
 	int cur_x1, cur_x2, cur_x3;
 	int cur_z1, cur_z2, cur_z3;
     int x1y, x2y, x3y, z1y, z2y, z3y;
-    
+        
     //Don't draw the triangle if it's offscreen
     if(tri->v[0].z < 0 && tri->v[1].z < 0 && tri->v[2].z < 0)
         return;
@@ -716,55 +714,13 @@ void draw_triangle(triangle* tri, SDL_Renderer *rend) {
     //Calculate the normal's angle vs the camera view direction
     normal_angle = acos(-cross[2]);
     
+    //This is turned off for now for testing of passing the camera through objects
     //If the normal is facing away from the camera, don't bother drawing it
     //if(normal_angle >= (PI/2)) {
     //    
     //    return;
     //}
     
-    //NOTE: We need to do some relatively easy math and clip all triangles to the front and rear planes
-    //should basically be testing each vertex's z component to see if it's less than zero or greater than 
-    //the screen depth and, if so, calculate the intersections of its connecting edges with the respective
-    //planes and create two new vertices at the intersection points. We should then proceed to draw the
-    //two new resultant triangles. 
-    //If two of the three are beyond the same plane, we can replace each with the intersection of their
-    //non-mutual edge and draw a single triangle.
-    //Should be able to do this by performing intersection check on each plane in turn?
-    //We can make this recursive:
-    //begin split_tri (one, two, three)
-    //    count = 0
-    //    check one with back (if out, count++ and mark out) 
-    //    check two with back (if out, count++ and mark out)
-    //    check three with back (if out, count++ and mark out)
-    //    switch count
-    //        1: get new back intersections a and b
-    //           split_tri(a, two, three) //actually make sure we build the right tri
-    //           split_tri(b, two, three) //same note
-    //           return
-    //        2: get new back intersections a and b //different from above for the aforementioned reasons
-    //           split_tri(a, b, three) //same note as always
-    //           return
-    //        0: //do nothing and flow through
-    //    endswitch
-    //    //Could probably shorten this by making two passes at the above while swapping planes
-    //    count = 0
-    //    check one with front (if out, count++ and mark out) 
-    //    check two with front (if out, count++ and mark out)
-    //    check three with front (if out, count++ and mark out)
-    //    switch count
-    //        1: get new front intersections a and b
-    //           split_tri(a, two, three) //actually make sure we build the right tri
-    //           split_tri(b, two, three) //same note
-    //           return
-    //        2: get new front intersections a and b //different from above for the aforementioned reasons
-    //           split_tri(a, b, three) //same note as always
-    //           return
-    //        0: //do nothing and flow through
-    //    endswitch
-    //    //There are no triangles out, so we can pass this one along
-    //    draw_triangle(one, two, three)
-    //end    
-    //
     //Calculate the shading color based on the first vertex color and the
     //angle between the camera and the surface normal
     lighting_pct = ((2.0*(PI - normal_angle)) / PI) - 1.0;
@@ -995,14 +951,14 @@ void draw_triangle(triangle* tri, SDL_Renderer *rend) {
 	}
 }
 
-void render_object(object *obj, SDL_Renderer *r) {
+void render_object(SDL_Renderer *r, object *obj) {
     
     node* item;
     int i;
     
     list_for_each(&(obj->tri_list), item, i) {
         
-        render_triangle((triangle*)item->payload, r);
+        render_triangle(r, (triangle*)item->payload);
     }
 }
 
