@@ -1136,7 +1136,7 @@ int main(int argc, char* argv[]) {
         
         //render_object(renderer, cube);  
         render_triangle(renderer, &test_tri[0]);
-        //draw_triangle(renderer, &test_tri[1]);
+        render_triangle(renderer, &test_tri[1]);
         
         if(i >= 1.0 && step > 0)
             step = -0.01;
