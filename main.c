@@ -1129,9 +1129,9 @@ int main(int argc, char* argv[]) {
 
         i += step;
         //translate_object(cube, 0.0, 0.0, step);
-        //rotate_object_y_local(cube, 1);
-        //rotate_object_x_local(cube, 1);
-        rotate_object_z_local(cube, 45);
+        rotate_object_y_local(cube, 1);
+        rotate_object_x_local(cube, 1);
+        rotate_object_z_local(cube, 1);
 
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
         SDL_RenderClear(renderer);
@@ -1148,7 +1148,7 @@ int main(int argc, char* argv[]) {
             step = 0.01;
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(1000);
+        SDL_Delay(10);
     }
 
     SDL_DestroyRenderer(renderer);
