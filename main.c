@@ -856,6 +856,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
             //skip drawing the whole thing entirely
             case 3:
                 return;
+                break;
             
             //If one vertex was out, find it's edge intersections and
             //build two new triangles out of it
@@ -927,6 +928,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                 
                 //Exit the function early for dat tail recursion              
                 return;
+                break;
             
             case 2:
                 //Figure out which point we're keeping
@@ -983,6 +985,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     
                 //Exit the function early for dat tail recursion  
                 return;
+                break;
             
             //If there were no intersections we won't do anything and 
             //allow execution to flow through
