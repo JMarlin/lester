@@ -840,7 +840,8 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
         count = 0;
         
         //Check each point to see if it's greater than the plane
-        for(i = 0; i < 3; i++)
+        for(i = 0; i < 3; i++) {
+            
             if((on_second_iteration && tri->v[i].y > plane_z) || 
               (!on_second_iteration && tri->v[i].y < plane_z)) {
 
@@ -850,6 +851,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                 
                 point_marked[i] = 0;
             }
+        }
             
         switch(count) {
             
