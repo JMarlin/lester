@@ -6,18 +6,18 @@
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 #define SCREEN_PIXELS SCREEN_WIDTH * SCREEN_HEIGHT
-#define SCREEN_DEPTH 10.0
+#define SCREEN_DEPTH 5.0
 
 //Convert a point scaled such that 1.0, 1.0 is at the upper right-hand
 //corner of the screen and -1.0, -1.0 is at the bottom right to pixel coords
 #define PI 3.141592653589793
 #define TO_SCREEN_Y(y) ((int)((SCREEN_HEIGHT-(y*SCREEN_HEIGHT))/2.0))
 #define TO_SCREEN_X(x) ((int)((SCREEN_WIDTH+(x*SCREEN_HEIGHT))/2.0))
-#define TO_SCREEN_Z(z) ((unsigned short)((z) > SCREEN_DEPTH || z < 0 ? 65534 : ((z*65534.0)/SCREEN_DEPTH)))
+#define TO_SCREEN_Z(z) ((unsigned short)((z) > SCREEN_DEPTH || z < 0 ? 255 : ((z*255.0)/SCREEN_DEPTH)))
 #define DEG_TO_RAD(a) ((((float)a)*PI)/180.0)
 
 float focal_length;
-unsigned short *zbuf;
+unsigned char *zbuf;
 
 typedef struct point {
     float x;
@@ -27,7 +27,7 @@ typedef struct point {
 typedef struct screen_point {
     int x;
     int y;
-    unsigned short z;
+    unsigned char z;
 } screen_point;
 
 typedef struct color {
@@ -69,12 +69,12 @@ typedef struct object {
 
 void clear_zbuf() {
     
-    memset((void*)zbuf, 255, SCREEN_PIXELS*2);  
+    memset((void*)zbuf, 255, SCREEN_PIXELS);  
 }
 
 int init_zbuf() {
     
-    zbuf = (unsigned short*)malloc(SCREEN_PIXELS*2);
+    zbuf = (unsigned char*)malloc(SCREEN_PIXELS);
     
     if(!zbuf)
         return 0;
@@ -450,22 +450,21 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
     dz = abs(z1 - z0);
     sz = z0 < z1 ? 1 : -1;
     err = (dx > dz ? dx : dz) / 2;
-	   
+	z_addr = scanline * SCREEN_WIDTH + x0;
+       
     while(1) {
         
         
 	if(x0 < SCREEN_WIDTH && x0 >= 0) {
         
-	    //Check the z buffer and draw the point
-        z_addr = scanline * SCREEN_WIDTH + x0;
-	
+	    //Check the z buffer and draw the point	
 	    if(z0 < zbuf[z_addr]) {
             
                 //Uncomment the below to view the depth buffer
-                //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
+                //SDL_SetRenderDrawColor(r, z0 >> 8, z0 >> 8, z0 >> 8, 0xFF);
                 SDL_RenderDrawPoint(r, x0, scanline);
                 zbuf[z_addr] = (unsigned short)z0;
-            }
+           }
 	}
         
         //Do the next step of z-interpolation along x
@@ -478,13 +477,14 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
             
             err -= dz;
             x0 += sx;
+            z_addr +=sx;
         } 
         
 		if(te < dz) {
             
             err += dx;
             z0 += sz; 
-        } 
+        }
     }
     
     printf("done\n");
@@ -1019,7 +1019,7 @@ void render_object(SDL_Renderer *r, object *obj) {
     
     list_for_each(&(obj->tri_list), item, i) {
         
-        draw_triangle(r, (triangle*)item->payload);
+        render_triangle(r, (triangle*)item->payload);
     }
 }
 
@@ -1032,6 +1032,7 @@ int main(int argc, char* argv[]) {
     float i = 0.0, step = 0.01;
     color *c;
     object *cube;
+    triangle test_tri[2];
     int done = 0;
 
     if(!init_zbuf()) {
@@ -1081,10 +1082,34 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    translate_object(cube, 0.0, 0.0, 1.5);
+    //translate_object(cube, 0.0, 0.0, 1.5);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
-    rotate_object_z_local(cube, 45);
+    //rotate_object_z_local(cube, 45);
+    test_tri[0].v[0].x = 0.5;
+    test_tri[0].v[0].y = 0.5;
+    test_tri[0].v[0].z = 1.0;
+    test_tri[0].v[0].c = c;
+    test_tri[0].v[1].x = 0.5;
+    test_tri[0].v[1].y = -0.5;
+    test_tri[0].v[1].z = 1.0;
+    test_tri[0].v[1].c = c;
+    test_tri[0].v[2].x = -0.5;
+    test_tri[0].v[2].y = -0.5;
+    test_tri[0].v[2].z = 1.0;
+    test_tri[0].v[2].c = c;
+    test_tri[1].v[0].x = 0.5;
+    test_tri[1].v[0].y = 0.5;
+    test_tri[1].v[0].z = 1.0;
+    test_tri[1].v[0].c = c;
+    test_tri[1].v[1].x = -0.5;
+    test_tri[1].v[1].y = -0.5;
+    test_tri[1].v[1].z = 1.0;
+    test_tri[1].v[1].c = c;
+    test_tri[1].v[2].x = -0.5;
+    test_tri[1].v[2].y = 0.5;
+    test_tri[1].v[2].z = 1.0;
+    test_tri[1].v[2].c = c;
 
     while(!done) {
 
@@ -1097,14 +1122,16 @@ int main(int argc, char* argv[]) {
         i += step;
         //translate_object(cube, 0.0, 0.0, step);
         //rotate_object_y_local(cube, 1);
-        rotate_object_x_local(cube, 1);
+        //rotate_object_x_local(cube, 1);
         //rotate_object_z_local(cube, 1);
 
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
         SDL_RenderClear(renderer);
         clear_zbuf();
         
-        render_object(renderer, cube);  
+        //render_object(renderer, cube);  
+        render_triangle(renderer, &test_tri[0]);
+        render_triangle(renderer, &test_tri[1]);
         
         if(i >= 1.0 && step > 0)
             step = -0.01;
