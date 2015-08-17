@@ -969,7 +969,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                 }      
                 
                 //Start building the new triangles, maintaining the CW or CCW ordering
-                if(fixed[1] < fixed[1]) {      
+                if(fixed[1] < fixed[0]) {      
                                   
                     clone_vertex(&new_point[0], &(out_triangle[0].v[0]));
                     clone_vertex(&new_point[1], &(out_triangle[0].v[1]));
