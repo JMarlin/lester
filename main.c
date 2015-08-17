@@ -1087,7 +1087,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    translate_object(cube, 0.0, 0.0, 1.5);
+    translate_object(cube, 0.0, 0.0, 1.0);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
     //rotate_object_z_local(cube, 45);
