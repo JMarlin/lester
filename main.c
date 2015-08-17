@@ -875,7 +875,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     dz = tri->v[original].z - tri->v[fixed[i]].z;
                                        
                     //Set the known axis value
-                    new_point[i].y = plane_z; //Replace this with a line function
+                    new_point[i].z = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
                     ndz = new_point[i].z - tri->v[fixed[i]].z;
@@ -945,7 +945,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     dz = tri->v[original].z - tri->v[fixed[i]].z;
                                        
                     //Set the known axis value
-                    new_point[i].y = plane_z; //Replace this with a line function
+                    new_point[i].z = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
                     ndz = new_point[i].z - tri->v[fixed[i]].z;
