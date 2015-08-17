@@ -1131,7 +1131,7 @@ int main(int argc, char* argv[]) {
         //translate_object(cube, 0.0, 0.0, step);
         //rotate_object_y_local(cube, 1);
         //rotate_object_x_local(cube, 1);
-        //rotate_object_z_local(cube, 1);
+        rotate_object_z_local(cube, 1);
 
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
         SDL_RenderClear(renderer);
