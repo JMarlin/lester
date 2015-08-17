@@ -1148,7 +1148,7 @@ int main(int argc, char* argv[]) {
             step = 0.01;
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(20);
+        SDL_Delay(10);
     }
 
     SDL_DestroyRenderer(renderer);
