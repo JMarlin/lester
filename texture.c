@@ -1,4 +1,4 @@
-#include <SDL.h>
+#include "SDL.h"
 #include <stdio.h>
 #include <math.h>
 #include <memory.h>
@@ -24,11 +24,6 @@ typedef struct point {
     float y;
 } point;
 
-void render_triangle(SDL_Renderer *r, point p0, point p1, point p2) {
-    
-    render_clipped_triangles(r, p0, p1, p2);
-}
-
 void draw_triangle(SDL_Renderer *r, point p0, point p1, point p2) {
     
     SDL_RenderDrawLine(r, TO_SCREEN_X(p0.x), TO_SCREEN_Y(p0.y), TO_SCREEN_X(p1.x), TO_SCREEN_Y(p1.y));
@@ -37,6 +32,160 @@ void draw_triangle(SDL_Renderer *r, point p0, point p1, point p2) {
 }
 
 void render_clipped_triangles(SDL_Renderer *r, point p0, point p1, point p2) {    
+
+    int count;
+    int on_second_iteration = 0;
+    int i;
+    float plane_y = 0;
+    float scale_factor, dx, dy, ndy;
+    unsigned char point_marked[3] = {0, 0, 0};
+    point new_point[2]; 
+    point apoint[3];
+    int fixed[2];
+    int original;
+    
+    apoint[0].x = p0.x;
+    apoint[0].y = p0.y;
+    apoint[1].x = p1.x;
+    apoint[1].y = p1.y;
+    apoint[2].x = p2.x;
+    apoint[2].y = p2.y;
+    
+    //Note that in the future we're also going to need to clip on the
+    //'U', 'V' and color axes
+    while(1) {
+        
+        count = 0;
+        
+        //Check each point to see if it's greater than the plane
+        for(i = 0; i < 3; i++)
+            if((on_second_iteration && apoint[i].y > plane_y) || 
+              (!on_second_iteration && apoint[i].y < plane_y)) {
+
+                point_marked[i] = 1;
+                count++;
+            }
+            
+        switch(count) {
+            
+            //If all of the vertices were out of range, 
+            //skip drawing the whole thing entirely
+            case 3:
+                return;
+            
+            //If one vertex was out, find it's edge intersections and
+            //build two new triangles out of it
+            case 1:
+                //Figure out what the other two points are
+                fixed[0] = point_marked[0] ? point_marked[1] ? 2 : 1 : 0;
+                fixed[1] = fixed[0] == 0 ? point_marked[1] ? 2 : 1 : fixed[0] == 1 ? point_marked[0] ? 2 : 0 : point_marked[0] ? 1 : 0;
+                original = point_marked[0] ? 0 : point_marked[1] ? 1 : 2;
+                
+                //Calculate the new intersection points
+                for(i = 0; i < 2; i++) {
+                    
+                    //x 'length'
+                    dx = apoint[original].x - apoint[fixed[i]].x;
+                    
+                    //y 'length'
+                    dy = apoint[original].y - apoint[fixed[i]].y;
+                    
+                    //Set the known axis value
+                    new_point[i].y = plane_y; //Replace this with a line function
+                    
+                    //y 'length' of new point
+                    ndy = new_point[i].y - apoint[fixed[i]].y;
+                    
+                    //ratio of new y-length to to old
+                    scale_factor = ndy/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                                           //we can't possibly have zero dy because that would place both the 'in' and 'out'
+                                           //vertexes behind the plane, which is obviously impossible, so we won't worry about
+                                           //that case until we start playing with sloped clipping planes
+                    
+                    //Scale the independent axis value by the scaling factor
+                    //We can do this for other arbitrary axes in the future, such as Z and U and V
+                    new_point[i].x = scale_factor * dx + apoint[fixed[i]].x;
+                }   
+                
+                //Test/draw the new triangles, maintaining the CW or CCW ordering
+                if(fixed[0] < fixed[1]) {
+                    
+                    render_clipped_triangles(r, new_point[0], apoint[fixed[0]], apoint[fixed[1]]);
+                    render_clipped_triangles(r, new_point[1], new_point[0], apoint[fixed[1]]);
+                } else {
+                    
+                    render_clipped_triangles(r, new_point[0], apoint[fixed[1]], apoint[fixed[0]]);
+                    render_clipped_triangles(r, new_point[1], apoint[fixed[1]], new_point[0]);
+                }
+                
+                //Exit the function early for dat tail recursion              
+                return;
+            
+            case 2:
+                //Figure out which point we're keeping
+                original = point_marked[0] ? point_marked[1] ? 2 : 1 : 0;
+                fixed[0] = point_marked[0] ? 0 : point_marked[1] ? 1 : 2;
+                fixed[1] = fixed[0] == 0 ? point_marked[1] ? 1 : 2 : fixed[0] == 1 ? point_marked[0] ? 0 : 2 : point_marked[0] ? 0 : 1;
+                            
+                //Calculate the new intersection points
+                for(i = 0; i < 2; i++) {
+                    
+                    //x 'length'
+                    dx = apoint[original].x - apoint[fixed[i]].x;
+                    
+                    //y 'length'
+                    dy = apoint[original].y - apoint[fixed[i]].y;
+                    
+                    //Set the known axis value
+                    new_point[i].y = plane_y; //Replace this with a line function
+                    
+                    //y 'length' of new point
+                    ndy = new_point[i].y - apoint[fixed[i]].y;
+                    
+                    //ratio of new y-length to to old
+                    scale_factor = ndy/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                                           //we can't possibly have zero dy because that would place both the 'in' and 'out'
+                                           //vertexes behind the plane, which is obviously impossible, so we won't worry about
+                                           //that case until we start playing with sloped clipping planes
+                    
+                    //Scale the independent axis value by the scaling factor
+                    //We can do this for other arbitrary axes in the future, such as Z and U and V
+                    new_point[i].x = scale_factor * dx + apoint[fixed[i]].x;
+                }    
+                
+                //Test/draw the new triangles, maintaining the CW or CCW ordering
+                if(fixed[0] < fixed[1])                     
+                    render_clipped_triangles(r, new_point[0], new_point[1], apoint[original]);
+                else 
+                    render_clipped_triangles(r, new_point[1], new_point[0], apoint[original]);
+                    
+                //Exit the function early for dat tail recursion  
+                return;
+            
+            //If there were no intersections we won't do anything and 
+            //allow execution to flow through
+            case 0:
+            default:
+                break; 
+        }
+
+        //If we hit case 0 both times above, all points on this
+        //triangle lie in the drawable area and we can leave this
+        //clipping loop and flow down to do the drawing of the 
+        //processed triangle         
+        if(on_second_iteration)
+            break;
+        
+        on_second_iteration = 1;
+        plane_y = SCREEN_DEPTH;
+    }    
+    
+    //If we got this far, the triangle is drawable. So we should do that. Or whatever.
+    SDL_SetRenderDrawColor(r, 0xFF, 0xFF, 0x0, 0xFF);
+    draw_triangle(r, p0, p1, p2);   
+}
+
+void render_clipped_triangles_old(SDL_Renderer *r, point p0, point p1, point p2) {    
     //begin split_tri (one, two, three)
     //    count = 0
     //    check one with back (if out, count++ and mark out) 
@@ -178,6 +327,11 @@ void render_clipped_triangles(SDL_Renderer *r, point p0, point p1, point p2) {
     //If we got this far, the triangle is drawable. So we should do that. Or whatever.
     SDL_SetRenderDrawColor(r, 0xFF, 0xFF, 0x0, 0xFF);
     draw_triangle(r, p0, p1, p2);   
+}
+
+void render_triangle(SDL_Renderer *r, point p0, point p1, point p2) {
+    
+    render_clipped_triangles(r, p0, p1, p2);
 }
 
 void rotate_point_global(point *p, float angle) {
