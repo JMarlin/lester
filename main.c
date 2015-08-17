@@ -846,6 +846,9 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
 
                 point_marked[i] = 1;
                 count++;
+            } else {
+                
+                point_marked[i] = 0;
             }
             
         switch(count) {
