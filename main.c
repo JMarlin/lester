@@ -881,7 +881,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     ndz = new_point[i].z - tri->v[fixed[i]].z;
                     
                     //ratio of new y-length to to old
-                    scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                    scale_factor = ndz/dz; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
                                            //we can't possibly have zero dy because that would place both the 'in' and 'out'
                                            //vertexes behind the plane, which is obviously impossible, so we won't worry about
                                            //that case until we start playing with sloped clipping planes
@@ -889,7 +889,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     //Scale the independent axis value by the scaling factor
                     //We can do this for other arbitrary axes in the future, such as U and V
                     new_point[i].x = scale_factor * dx + tri->v[fixed[i]].x;
-                    new_point[i].z = scale_factor * dz + tri->v[fixed[i]].z;
+                    new_point[i].y = scale_factor * dy + tri->v[fixed[i]].y;
                     
                     //Copy the color information
                     new_point[i].c = tri->v[fixed[i]].c;
@@ -951,7 +951,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     ndz = new_point[i].z - tri->v[fixed[i]].z;
                     
                     //ratio of new y-length to to old
-                    scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                    scale_factor = ndz/dz; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
                                            //we can't possibly have zero dy because that would place both the 'in' and 'out'
                                            //vertexes behind the plane, which is obviously impossible, so we won't worry about
                                            //that case until we start playing with sloped clipping planes
@@ -959,7 +959,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     //Scale the independent axis value by the scaling factor
                     //We can do this for other arbitrary axes in the future, such as U and V
                     new_point[i].x = scale_factor * dx + tri->v[fixed[i]].x;
-                    new_point[i].z = scale_factor * dz + tri->v[fixed[i]].z;
+                    new_point[i].y = scale_factor * dy + tri->v[fixed[i]].y;
                     
                     //Copy the color information
                     new_point[i].c = tri->v[fixed[i]].c;
