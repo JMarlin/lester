@@ -878,7 +878,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     new_point[i].y = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
-                    ndz = new_point[i].y - tri->v[fixed[i]].y;
+                    ndz = new_point[i].z - tri->v[fixed[i]].z;
                     
                     //ratio of new y-length to to old
                     scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
@@ -948,7 +948,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     new_point[i].y = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
-                    ndz = new_point[i].y - tri->v[fixed[i]].y;
+                    ndz = new_point[i].z - tri->v[fixed[i]].z;
                     
                     //ratio of new y-length to to old
                     scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
