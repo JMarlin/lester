@@ -1087,10 +1087,12 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    //translate_object(cube, 0.0, 0.0, 1.5);
+    translate_object(cube, 0.0, 0.0, 1.5);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
     //rotate_object_z_local(cube, 45);
+    
+    /*
     test_tri[0].v[0].x = 0.5;
     test_tri[0].v[0].y = 0.5;
     test_tri[0].v[0].z = 1.0;
@@ -1115,6 +1117,7 @@ int main(int argc, char* argv[]) {
     test_tri[1].v[2].y = 0.5;
     test_tri[1].v[2].z = 1.0;
     test_tri[1].v[2].c = c;
+    */
 
     while(!done) {
 
@@ -1134,9 +1137,9 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
         clear_zbuf();
         
-        //render_object(renderer, cube);  
-        render_triangle(renderer, &test_tri[0]);
-        render_triangle(renderer, &test_tri[1]);
+        render_object(renderer, cube);  
+        //render_triangle(renderer, &test_tri[0]);
+        //render_triangle(renderer, &test_tri[1]);
         
         if(i >= 1.0 && step > 0)
             step = -0.01;
