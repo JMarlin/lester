@@ -824,7 +824,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
     int count;
     int on_second_iteration = 0;
     int i;
-    float plane_z = 0;
+    float plane_z = 1;
     float scale_factor, dx, dy, dz, ndz;
     unsigned char point_marked[3] = {0, 0, 0};
     vertex new_point[2]; 
@@ -842,8 +842,8 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
         //Check each point to see if it's greater than the plane
         for(i = 0; i < 3; i++) {
             
-            if((on_second_iteration && tri->v[i].y > plane_z) || 
-              (!on_second_iteration && tri->v[i].y < plane_z)) {
+            if((on_second_iteration && tri->v[i].z > plane_z) || 
+              (!on_second_iteration && tri->v[i].z < plane_z)) {
 
                 point_marked[i] = 1;
                 count++;
@@ -878,13 +878,13 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     dz = tri->v[original].z - tri->v[fixed[i]].z;
                                        
                     //Set the known axis value
-                    new_point[i].y = plane_z; //Replace this with a line function
+                    new_point[i].z = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
-                    ndz = new_point[i].y - tri->v[fixed[i]].y;
+                    ndz = new_point[i].z - tri->v[fixed[i]].z;
                     
                     //ratio of new y-length to to old
-                    scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                    scale_factor = ndz/dz; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
                                            //we can't possibly have zero dy because that would place both the 'in' and 'out'
                                            //vertexes behind the plane, which is obviously impossible, so we won't worry about
                                            //that case until we start playing with sloped clipping planes
@@ -892,7 +892,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     //Scale the independent axis value by the scaling factor
                     //We can do this for other arbitrary axes in the future, such as U and V
                     new_point[i].x = scale_factor * dx + tri->v[fixed[i]].x;
-                    new_point[i].z = scale_factor * dz + tri->v[fixed[i]].z;
+                    new_point[i].y = scale_factor * dy + tri->v[fixed[i]].y;
                     
                     //Copy the color information
                     new_point[i].c = tri->v[fixed[i]].c;
@@ -948,13 +948,13 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     dz = tri->v[original].z - tri->v[fixed[i]].z;
                                        
                     //Set the known axis value
-                    new_point[i].y = plane_z; //Replace this with a line function
+                    new_point[i].z = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
-                    ndz = new_point[i].y - tri->v[fixed[i]].y;
+                    ndz = new_point[i].z - tri->v[fixed[i]].z;
                     
                     //ratio of new y-length to to old
-                    scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                    scale_factor = ndz/dz; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
                                            //we can't possibly have zero dy because that would place both the 'in' and 'out'
                                            //vertexes behind the plane, which is obviously impossible, so we won't worry about
                                            //that case until we start playing with sloped clipping planes
@@ -962,7 +962,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     //Scale the independent axis value by the scaling factor
                     //We can do this for other arbitrary axes in the future, such as U and V
                     new_point[i].x = scale_factor * dx + tri->v[fixed[i]].x;
-                    new_point[i].z = scale_factor * dz + tri->v[fixed[i]].z;
+                    new_point[i].y = scale_factor * dy + tri->v[fixed[i]].y;
                     
                     //Copy the color information
                     new_point[i].c = tri->v[fixed[i]].c;
