@@ -962,7 +962,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     //Scale the independent axis value by the scaling factor
                     //We can do this for other arbitrary axes in the future, such as U and V
                     new_point[i].x = scale_factor * dx + tri->v[fixed[i]].x;
-                    new_point[i].y = scale_factor * dy + tri->v[fixed[i]].y;
+                    new_point[i].z = scale_factor * dz + tri->v[fixed[i]].z;
                     
                     //Copy the color information
                     new_point[i].c = tri->v[fixed[i]].c;
