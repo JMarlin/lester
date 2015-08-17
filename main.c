@@ -13,11 +13,11 @@
 #define PI 3.141592653589793
 #define TO_SCREEN_Y(y) ((int)((SCREEN_HEIGHT-(y*SCREEN_HEIGHT))/2.0))
 #define TO_SCREEN_X(x) ((int)((SCREEN_WIDTH+(x*SCREEN_HEIGHT))/2.0))
-#define TO_SCREEN_Z(z) ((unsigned char)((z) > SCREEN_DEPTH || z < 0 ? 255 : ((z*255.0)/SCREEN_DEPTH)))
+#define TO_SCREEN_Z(z) ((unsigned short)((z) > SCREEN_DEPTH || z < 0 ? 65534 : ((z*65534.0)/SCREEN_DEPTH)))
 #define DEG_TO_RAD(a) ((((float)a)*PI)/180.0)
 
 float focal_length;
-unsigned char *zbuf;
+unsigned short *zbuf;
 
 typedef struct point {
     float x;
@@ -27,7 +27,7 @@ typedef struct point {
 typedef struct screen_point {
     int x;
     int y;
-    unsigned char z;
+    unsigned short z;
 } screen_point;
 
 typedef struct color {
@@ -69,12 +69,12 @@ typedef struct object {
 
 void clear_zbuf() {
     
-    memset((void*)zbuf, 255, SCREEN_PIXELS);  
+    memset((void*)zbuf, 255, SCREEN_PIXELS*2);  
 }
 
 int init_zbuf() {
     
-    zbuf = (unsigned char*)malloc(SCREEN_PIXELS);
+    zbuf = (unsigned short*)malloc(SCREEN_PIXELS*2);
     
     if(!zbuf)
         return 0;
@@ -450,8 +450,6 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
     dz = abs(z1 - z0);
     sz = z0 < z1 ? 1 : -1;
     err = (dx > dz ? dx : dz) / 2;
-    te;
-    z_addr;
 	   
     while(1) {
         
@@ -466,7 +464,7 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
                 //Uncomment the below to view the depth buffer
                 //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
                 SDL_RenderDrawPoint(r, x0, scanline);
-                zbuf[z_addr] = z0;
+                zbuf[z_addr] = (unsigned short)z0;
             }
 	}
         
@@ -843,8 +841,8 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
         
         //Check each point to see if it's greater than the plane
         for(i = 0; i < 3; i++)
-            if((on_second_iteration && tri->v[i].z > plane_z) || 
-              (!on_second_iteration && tri->v[i].z < plane_z)) {
+            if((on_second_iteration && tri->v[i].y > plane_z) || 
+              (!on_second_iteration && tri->v[i].y < plane_z)) {
 
                 point_marked[i] = 1;
                 count++;
@@ -875,13 +873,13 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     dz = tri->v[original].z - tri->v[fixed[i]].z;
                                        
                     //Set the known axis value
-                    new_point[i].z = plane_z; //Replace this with a line function
+                    new_point[i].y = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
-                    ndz = new_point[i].z - tri->v[fixed[i]].z;
+                    ndz = new_point[i].y - tri->v[fixed[i]].y;
                     
                     //ratio of new y-length to to old
-                    scale_factor = ndz/dz; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                    scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
                                            //we can't possibly have zero dy because that would place both the 'in' and 'out'
                                            //vertexes behind the plane, which is obviously impossible, so we won't worry about
                                            //that case until we start playing with sloped clipping planes
@@ -889,7 +887,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     //Scale the independent axis value by the scaling factor
                     //We can do this for other arbitrary axes in the future, such as U and V
                     new_point[i].x = scale_factor * dx + tri->v[fixed[i]].x;
-                    new_point[i].y = scale_factor * dy + tri->v[fixed[i]].y;
+                    new_point[i].z = scale_factor * dz + tri->v[fixed[i]].z;
                     
                     //Copy the color information
                     new_point[i].c = tri->v[fixed[i]].c;
@@ -945,13 +943,13 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     dz = tri->v[original].z - tri->v[fixed[i]].z;
                                        
                     //Set the known axis value
-                    new_point[i].z = plane_z; //Replace this with a line function
+                    new_point[i].y = plane_z; //Replace this with a line function
                     
                     //z 'length' of new point
-                    ndz = new_point[i].z - tri->v[fixed[i]].z;
+                    ndz = new_point[i].y - tri->v[fixed[i]].y;
                     
                     //ratio of new y-length to to old
-                    scale_factor = ndz/dz; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
+                    scale_factor = ndz/dy; //For now, we're dealing with a plane orthogonal to the clipping axis and as such 
                                            //we can't possibly have zero dy because that would place both the 'in' and 'out'
                                            //vertexes behind the plane, which is obviously impossible, so we won't worry about
                                            //that case until we start playing with sloped clipping planes
@@ -1021,7 +1019,7 @@ void render_object(SDL_Renderer *r, object *obj) {
     
     list_for_each(&(obj->tri_list), item, i) {
         
-        render_triangle(r, (triangle*)item->payload);
+        draw_triangle(r, (triangle*)item->payload);
     }
 }
 
@@ -1031,7 +1029,7 @@ int main(int argc, char* argv[]) {
     SDL_Renderer* renderer = NULL;
     SDL_Event e;
     int fov_angle;
-    float i = 1.0, step = -0.01;
+    float i = 0.0, step = 0.01;
     color *c;
     object *cube;
     int done = 0;
@@ -1058,7 +1056,7 @@ int main(int argc, char* argv[]) {
 
     printf("Cube created successfully\n");
 
-    fov_angle = 100;
+    fov_angle = 90;
     focal_length = 1.0 / (2.0 * tan(DEG_TO_RAD(fov_angle)/2.0));
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -1083,10 +1081,10 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    //translate_object(cube, 0.0, 0.0, 10.0);
+    translate_object(cube, 0.0, 0.0, 1.5);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
-    //rotate_object_z_local(cube, 45);
+    rotate_object_z_local(cube, 45);
 
     while(!done) {
 
@@ -1099,7 +1097,7 @@ int main(int argc, char* argv[]) {
         i += step;
         //translate_object(cube, 0.0, 0.0, step);
         //rotate_object_y_local(cube, 1);
-        //rotate_object_x_local(cube, 1);
+        rotate_object_x_local(cube, 1);
         //rotate_object_z_local(cube, 1);
 
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
@@ -1111,7 +1109,7 @@ int main(int argc, char* argv[]) {
         if(i >= 1.0 && step > 0)
             step = -0.01;
 
-        if(i <= 0.5 && step < 0)
+        if(i <= 0.0 && step < 0)
             step = 0.01;
 
         SDL_RenderPresent(renderer);
