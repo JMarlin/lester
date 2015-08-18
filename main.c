@@ -439,6 +439,49 @@ void project(vertex* v, screen_point* p) {
 //the value already written to the z-buffer
 void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
 
+    unsigned char newz;
+    int z_addr, direction;	
+	float dz = z1 - z0, dx = x1 - x0, m = dx ? dz/dx : 0, newz_f; 
+                 
+    //don't draw off the screen
+    if(scanline >= SCREEN_HEIGHT || scanline < 0)
+    	return;  
+      
+    if(x0 > x1) {
+        direction = -1;  
+        dz = z0 - z1, dx = x0 - x1, m = dx ? dz/dx : 0;
+    } else {
+        direction = 1;
+    } 
+    	    
+	z_addr = scanline * SCREEN_WIDTH + x0;
+       
+    for(; x0 != x1; x0 += direction) {
+
+        newz_f = m*((float)x0 - (float)x1) + (float)z0;
+        newz = (unsigned char)(newz_f >= 255 ? 255 : newz_f < 0 ? 0 : newz_f);
+
+        if(x0 < SCREEN_WIDTH && x0 >= 0) {
+            
+            //Check the z buffer and draw the point	
+            if(newz < zbuf[z_addr]) {
+                
+                    //Uncomment the below to view the depth buffer
+                    SDL_SetRenderDrawColor(r, newz, newz, newz, 0xFF);
+                    SDL_RenderDrawPoint(r, x0, scanline);
+                    zbuf[z_addr] = newz;
+            }
+        }
+        
+        z_addr += direction;
+    }
+}
+
+//Draw an rgb-colored line along the scanline from x=x1 to x=x2, interpolating
+//z-values and only drawing the pixel if the interpolated z-value is less than
+//the value already written to the z-buffer
+void draw_scanline_old(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
+
     int dx, sx, dz, sz, err, te, z_addr;	
 	   
     //don't draw off the screen
@@ -461,7 +504,7 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
 	    if(z0 < zbuf[z_addr]) {
             
                 //Uncomment the below to view the depth buffer
-                //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
+                SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
                 SDL_RenderDrawPoint(r, x0, scanline);
                 zbuf[z_addr] = (unsigned short)z0;
            }
@@ -486,8 +529,6 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
             z0 += sz; 
         }
     }
-    
-    printf("done\n");
 }
 
 void draw_triangle(SDL_Renderer *rend, triangle* tri) {
@@ -543,7 +584,7 @@ void draw_triangle(SDL_Renderer *rend, triangle* tri) {
     //If the normal is facing away from the camera, don't bother drawing it
     if(normal_angle >= (3*PI/4)) {
         
-        //return;
+        return;
     }
     
     //NOTE: We need to do some relatively easy math and clip all triangles to the front and rear planes
@@ -1007,7 +1048,7 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_Event e;
-    int fov_angle, player_angle = 90, chg_angle;
+    int fov_angle, player_angle = 90, chg_angle = 0;
     float i = 0.0, step = 0, rstep = 0, fps, walkspeed = 0.04;
     color *c;
     object *cube1, *cube2;
@@ -1073,8 +1114,8 @@ int main(int argc, char* argv[]) {
     //SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
-    translate_object(cube1, 0.0, -3.0, 0.0);
-    //translate_object(cube2, 0.0, 0.49, 0.0);
+    translate_object(cube1, 0.0, -3.0, 2.0);
+    translate_object(cube2, 0.0, 0.0, 2.0);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
     //rotate_object_z_local(cube, 45);
