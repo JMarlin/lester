@@ -461,7 +461,7 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
 	    if(z0 < zbuf[z_addr]) {
             
                 //Uncomment the below to view the depth buffer
-                //SDL_SetRenderDrawColor(r, z0 >> 8, z0 >> 8, z0 >> 8, 0xFF);
+                //SDL_SetRenderDrawColor(r, z0, z0, z0, 0xFF);
                 SDL_RenderDrawPoint(r, x0, scanline);
                 zbuf[z_addr] = (unsigned short)z0;
            }
@@ -541,10 +541,10 @@ void draw_triangle(SDL_Renderer *rend, triangle* tri) {
     normal_angle = acos(-cross[2]);
     
     //If the normal is facing away from the camera, don't bother drawing it
-    //if(normal_angle >= (PI/2)) {
-    //    
-    //    return;
-    //}
+    if(normal_angle >= (3*PI/4)) {
+        
+        return;
+    }
     
     //NOTE: We need to do some relatively easy math and clip all triangles to the front and rear planes
     //should basically be testing each vertex's z component to see if it's less than zero or greater than 
@@ -591,12 +591,12 @@ void draw_triangle(SDL_Renderer *rend, triangle* tri) {
     //
     //Calculate the shading color based on the first vertex color and the
     //angle between the camera and the surface normal
-    lighting_pct = ((2.0*(PI - normal_angle)) / PI) - 1.0;
-    r = tri->v[0].c->r * lighting_pct;
+    lighting_pct = 1.0 - (normal_angle/PI);
+    r = (float)tri->v[0].c->r * lighting_pct;
     r = r > 255.0 ? 255 : r;     
-    g = tri->v[0].c->g * lighting_pct;
+    g = (float)tri->v[0].c->g * lighting_pct;
     g = g > 255.0 ? 255 : g;
-    b = tri->v[0].c->b * lighting_pct;
+    b = (float)tri->v[0].c->b * lighting_pct;
     b = b > 255.0 ? 255 : b;
     SDL_SetRenderDrawColor(rend, (unsigned char)r, (unsigned char)g, (unsigned char)b, 0xFF);
     
@@ -824,7 +824,7 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
     int count;
     int on_second_iteration = 0;
     int i;
-    float plane_z = 1;
+    float plane_z = 0.1;
     float scale_factor, dx, dy, dz, ndz;
     unsigned char point_marked[3] = {0, 0, 0};
     vertex new_point[2]; 
@@ -898,32 +898,16 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     new_point[i].c = tri->v[fixed[i]].c;
                 }   
                 
-                
                 //Test/draw the new triangles, maintaining the CW or CCW ordering
-                //Same starting points for all triangles
-                clone_vertex(&new_point[0], &(out_triangle[0].v[0]));
-                clone_vertex(&new_point[1], &(out_triangle[1].v[0]));
-                
-                //do corrections for CW/CCW
-                if(fixed[0] < fixed[1]) {
+                //Build the first triangle
+                clone_vertex(&new_point[0], &(out_triangle[0].v[original]));
+                clone_vertex(&(tri->v[fixed[0]]), &(out_triangle[0].v[fixed[0]]));
+                clone_vertex(&(tri->v[fixed[1]]), &(out_triangle[0].v[fixed[1]]));
                     
-                    //Build the first triangle
-                    clone_vertex(&(tri->v[fixed[0]]), &(out_triangle[0].v[1]));
-                    clone_vertex(&(tri->v[fixed[1]]), &(out_triangle[0].v[2]));
-                    
-                    //Build the second triangle
-                    clone_vertex(&new_point[0], &(out_triangle[1].v[1]));
-                    clone_vertex(&(tri->v[fixed[1]]), &(out_triangle[1].v[2]));
-                } else {
-                    
-                    //Build the first triangle
-                    clone_vertex(&(tri->v[fixed[1]]), &(out_triangle[0].v[1]));
-                    clone_vertex(&(tri->v[fixed[0]]), &(out_triangle[0].v[2]));
-                    
-                    //Build the second triangle
-                    clone_vertex(&(tri->v[fixed[1]]), &(out_triangle[1].v[1]));
-                    clone_vertex(&new_point[0], &(out_triangle[1].v[2]));
-                }
+                //Build the second triangle    
+                clone_vertex(&new_point[1], &(out_triangle[1].v[original]));
+                clone_vertex(&new_point[0], &(out_triangle[1].v[fixed[0]]));
+                clone_vertex(&(tri->v[fixed[1]]), &(out_triangle[1].v[fixed[1]]));
                 
                 //Run the new triangles through another round of processing
                 clip_and_render(r, &out_triangle[0]);
@@ -968,20 +952,10 @@ void clip_and_render(SDL_Renderer *r, triangle* tri) {
                     new_point[i].c = tri->v[fixed[i]].c;
                 }      
                 
-                //Start building the new triangles, maintaining the CW or CCW ordering
-                if(fixed[0] < fixed[1]) {      
-                                  
-                    clone_vertex(&new_point[0], &(out_triangle[0].v[0]));
-                    clone_vertex(&new_point[1], &(out_triangle[0].v[1]));
-                } else {
-                    
-                    //render_clipped_triangles(r, new_point[1], new_point[0], tri->v[original]);
-                    clone_vertex(&new_point[1], &(out_triangle[0].v[0]));
-                    clone_vertex(&new_point[0], &(out_triangle[0].v[1]));
-                }
-                
-                //Always ends on the same point
-                clone_vertex(&(tri->v[original]), &(out_triangle[0].v[2]));
+                //Start building the new triangles, maintaining the CW or CCW ordering 
+                clone_vertex(&(tri->v[original]), &(out_triangle[0].v[original]));
+                clone_vertex(&new_point[0], &(out_triangle[0].v[fixed[0]]));
+                clone_vertex(&new_point[1], &(out_triangle[0].v[fixed[1]]));
                 
                 //Send through processing again
                 clip_and_render(r, &out_triangle[0]);
@@ -1033,10 +1007,10 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_Event e;
-    int fov_angle;
-    float i = 0.0, step = 0.01;
+    int fov_angle, player_angle = 90, rstep = 0;
+    float i = 0.0, step = 0;
     color *c;
-    object *cube;
+    object *cube1, *cube2;
     triangle test_tri[2];
     int done = 0;
 
@@ -1054,7 +1028,13 @@ int main(int argc, char* argv[]) {
     
     printf("Color created successfully\n");
     
-    if(!(cube = new_cube(1.0, c))) {
+    if(!(cube1 = new_cube(5.0, new_color(255, 255, 255, 255)))) {
+        
+        printf("Could not allocate a new cube\n");
+        return -1;
+    }
+    
+    if(!(cube2 = new_cube(1.0, c))) {
         
         printf("Could not allocate a new cube\n");
         return -1;
@@ -1062,7 +1042,7 @@ int main(int argc, char* argv[]) {
 
     printf("Cube created successfully\n");
 
-    fov_angle = 90;
+    fov_angle = 60;
     focal_length = 1.0 / (2.0 * tan(DEG_TO_RAD(fov_angle)/2.0));
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -1087,7 +1067,10 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    translate_object(cube, 0.0, 0.0, 1.0);
+    //SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
+
+    translate_object(cube1, 0.0, -3.0, 0.0);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
     //rotate_object_z_local(cube, 45);
@@ -1125,28 +1108,93 @@ int main(int argc, char* argv[]) {
         
             if( e.type == SDL_QUIT ) 
                 done = 1;
+                
+            if(e.type == SDL_KEYDOWN) {
+                
+                switch(e.key.keysym.sym) {
+                    
+                    case SDLK_UP:
+                        
+                        step = 0.03;
+                    break;
+                    
+                    case SDLK_DOWN:
+                    
+                        step = -0.03;
+                    break;
+                    
+                    case SDLK_LEFT:
+                        
+                        rstep = -2;
+                    break;
+                    
+                    case SDLK_RIGHT:
+                    
+                        rstep = 2;
+                    break;
+                    
+                    default:
+                        done = 1;
+                        break;
+                }
+            }
+            
+            if(e.type == SDL_KEYUP) {
+                
+                switch(e.key.keysym.sym) {
+                    
+                    case SDLK_LEFT:
+                    case SDLK_RIGHT:
+                        rstep = 0;
+                    break;
+                    
+                    case SDLK_UP:
+                    case SDLK_DOWN:
+                        step = 0;
+                    break;
+                }
+            }
+            
+            if(e.type == SDL_MOUSEMOTION) {
+                
+                printf("yrel: %d\n", e.motion.yrel);
+                
+                rstep = e.motion.yrel*5;
+            } else {
+                
+                rstep = 0;
+            }
         }
 
         i += step;
-        //translate_object(cube, 0.0, 0.0, step);
-        rotate_object_y_local(cube, 1);
-        rotate_object_x_local(cube, 1);
-        rotate_object_z_local(cube, 1);
+        //translate_object(cube1, 0.0, 0.0, step);
+        //rotate_object_y_local(cube1, 1);
+        //rotate_object_x_local(cube1, 1);
+        //rotate_object_z_local(cube1, 1);
+        player_angle += rstep;
+        
+        if(player_angle == 360)
+            player_angle = 0;
+            
+        if(player_angle == -1)
+            player_angle = 359;
+            
+        translate_object(cube2, 0.0, 0.0, -step);
+        rotate_object_y_global(cube2, -rstep);
+        translate_object(cube1, 0.0, 0.0, -step);
+        rotate_object_y_global(cube1, -rstep);
+        //rotate_object_x_local(cube2, 1);
+        //rotate_object_z_local(cube2, 1);
 
-        SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+        SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0x00, 0xFF);
         SDL_RenderClear(renderer);
         clear_zbuf();
         
-        render_object(renderer, cube);  
+        render_object(renderer, cube1);
+        render_object(renderer, cube2);  
         //render_triangle(renderer, &test_tri[0]);
         //render_triangle(renderer, &test_tri[1]);
         
-        if(i >= 1.0 && step > 0)
-            step = -0.01;
-
-        if(i <= 0.0 && step < 0)
-            step = 0.01;
-
         SDL_RenderPresent(renderer);
         SDL_Delay(10);
     }
