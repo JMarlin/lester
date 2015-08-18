@@ -1254,7 +1254,7 @@ int main(int argc, char* argv[]) {
         sprintf(&title, "LESTER %f FPS", fps);
         SDL_SetWindowTitle(window, &title);
         
-        while((SDL_GetTicks() - frame_start) <= 16);
+        //while((SDL_GetTicks() - frame_start) <= 16);
     }
 
     SDL_DestroyRenderer(renderer);
