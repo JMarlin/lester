@@ -13,11 +13,11 @@
 #define PI 3.141592653589793
 #define TO_SCREEN_Y(y) ((int)((SCREEN_HEIGHT-(y*SCREEN_HEIGHT))/2.0))
 #define TO_SCREEN_X(x) ((int)((SCREEN_WIDTH+(x*SCREEN_HEIGHT))/2.0))
-#define TO_SCREEN_Z(z) ((unsigned short)((z) > SCREEN_DEPTH || z < 0 ? 255 : ((z*255.0)/SCREEN_DEPTH)))
+#define TO_SCREEN_Z(z) ((unsigned short)((z) > SCREEN_DEPTH || z < 0 ? 65535 : ((z*65535.0)/SCREEN_DEPTH)))
 #define DEG_TO_RAD(a) ((((float)a)*PI)/180.0)
 
 float focal_length;
-unsigned char *zbuf;
+unsigned short *zbuf;
 
 typedef struct point {
     float x;
@@ -27,7 +27,7 @@ typedef struct point {
 typedef struct screen_point {
     int x;
     int y;
-    unsigned char z;
+    unsigned short z;
 } screen_point;
 
 typedef struct color {
@@ -69,12 +69,12 @@ typedef struct object {
 
 void clear_zbuf() {
     
-    memset((void*)zbuf, 255, SCREEN_PIXELS);  
+    memset((void*)zbuf, 255, SCREEN_PIXELS*2);  
 }
 
 int init_zbuf() {
     
-    zbuf = (unsigned char*)malloc(SCREEN_PIXELS);
+    zbuf = (unsigned short*)malloc(SCREEN_PIXELS*2);
     
     if(!zbuf)
         return 0;
@@ -439,27 +439,33 @@ void project(vertex* v, screen_point* p) {
 //the value already written to the z-buffer
 void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
 
-    unsigned char newz;
-    int z_addr, direction;	
-	float dz = z1 - z0, dx = x1 - x0, m = dx ? dz/dx : 0, newz_f; 
+    unsigned short newz;
+    int z_addr, direction, t;	
+	float dz, dx, m, newz_f; 
                  
     //don't draw off the screen
     if(scanline >= SCREEN_HEIGHT || scanline < 0)
     	return;  
       
     if(x0 > x1) {
-        direction = -1;  
-        dz = z0 - z1, dx = x0 - x1, m = dx ? dz/dx : 0;
-    } else {
-        direction = 1;
-    } 
+     
+        t = x0;
+        x0 = x1;
+        x1 = t;
+        t = z0;
+        z0 = z1;
+        z1 = t; 
+    }
     	    
-	z_addr = scanline * SCREEN_WIDTH + x0;
+	dz = z1 - z0;
+    dx = x1 - x0;
+    m = dx ? dz/dx : 0;
+    z_addr = scanline * SCREEN_WIDTH + x0;
        
-    for(; x0 != x1; x0 += direction) {
+    for(; x0 <= x1; x0++, z_addr++) {
 
-        newz_f = m*((float)x0 - (float)x1) + (float)z0;
-        newz = (unsigned char)(newz_f >= 255 ? 255 : newz_f < 0 ? 0 : newz_f);
+        newz_f = m*((float)x0 - (float)x1) + (float)z1;
+        newz = (unsigned short)(newz_f >= 65535 ? 65535 : newz_f < 0 ? 0 : newz_f);
 
         if(x0 < SCREEN_WIDTH && x0 >= 0) {
             
@@ -467,13 +473,11 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
             if(newz < zbuf[z_addr]) {
                 
                     //Uncomment the below to view the depth buffer
-                    SDL_SetRenderDrawColor(r, newz, newz, newz, 0xFF);
+                    //SDL_SetRenderDrawColor(r, newz >> 8, newz >> 8, newz >> 8, 0xFF);
                     SDL_RenderDrawPoint(r, x0, scanline);
                     zbuf[z_addr] = newz;
             }
         }
-        
-        z_addr += direction;
     }
 }
 
