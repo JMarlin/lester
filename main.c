@@ -441,7 +441,7 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
 
     unsigned short newz;
     int z_addr, direction, t;	
-	float dz, dx, m, newz_f; 
+	float dz, dx, m, newz_f, x0_f, x1_f, z0_f, z1_f; 
                  
     //don't draw off the screen
     if(scanline >= SCREEN_HEIGHT || scanline < 0)
@@ -449,25 +449,32 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
       
     if(x0 > x1) {
      
+        x0_f = x1;
+        x1_f = x0;
+        z0_f = z1;
+        z1_f = z0;
         t = x0;
         x0 = x1;
-        x1 = t;
-        t = z0;
-        z0 = z1;
-        z1 = t; 
+        x1 = t; 
+    } else {
+        
+        x1_f = x1;
+        x0_f = x0;
+        z1_f = z1;
+        z0_f = z0;
     }
     	    
-	dz = z1 - z0;
-    dx = x1 - x0;
+	dz = z1_f - z0_f;
+    dx = x1_f - x0_f;
     m = dx ? dz/dx : 0;
     z_addr = scanline * SCREEN_WIDTH + x0;
        
-    for(; x0 <= x1; x0++, z_addr++) {
-
-        newz_f = m*((float)x0 - (float)x1) + (float)z1;
-        newz = (unsigned short)(newz_f >= 65535 ? 65535 : newz_f < 0 ? 0 : newz_f);
+    for(; x0 <= x1; x0_f += 1, x0++, z_addr++) {
 
         if(x0 < SCREEN_WIDTH && x0 >= 0) {
+
+            newz_f = m*(x0_f - x1_f) + z1_f;
+            newz = (unsigned short)(newz_f >= 65535 ? 65535 : newz_f < 0 ? 0 : newz_f);
             
             //Check the z buffer and draw the point	
             if(newz < zbuf[z_addr]) {
@@ -1236,7 +1243,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
         clear_zbuf();
         
-        render_object(renderer, cube1);
+        //render_object(renderer, cube1);
         render_object(renderer, cube2);  
         //render_triangle(renderer, &test_tri[0]);
         //render_triangle(renderer, &test_tri[1]);
