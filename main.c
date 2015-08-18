@@ -543,7 +543,7 @@ void draw_triangle(SDL_Renderer *rend, triangle* tri) {
     //If the normal is facing away from the camera, don't bother drawing it
     if(normal_angle >= (3*PI/4)) {
         
-        return;
+        //return;
     }
     
     //NOTE: We need to do some relatively easy math and clip all triangles to the front and rear planes
@@ -1007,12 +1007,15 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = NULL;
     SDL_Renderer* renderer = NULL;
     SDL_Event e;
-    int fov_angle, player_angle = 90, rstep = 0;
-    float i = 0.0, step = 0;
+    int fov_angle, player_angle = 90, chg_angle;
+    float i = 0.0, step = 0, rstep = 0, fps, walkspeed = 0.04;
     color *c;
     object *cube1, *cube2;
     triangle test_tri[2];
     int done = 0;
+    int numFrames = 0; 
+    Uint32 startTime = SDL_GetTicks(), frame_start;
+    char title[255] = "LESTER";
 
     if(!init_zbuf()) {
         
@@ -1042,7 +1045,7 @@ int main(int argc, char* argv[]) {
 
     printf("Cube created successfully\n");
 
-    fov_angle = 60;
+    fov_angle = 50;
     focal_length = 1.0 / (2.0 * tan(DEG_TO_RAD(fov_angle)/2.0));
 
     if(SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -1071,6 +1074,7 @@ int main(int argc, char* argv[]) {
     SDL_SetRelativeMouseMode(SDL_TRUE);
 
     translate_object(cube1, 0.0, -3.0, 0.0);
+    //translate_object(cube2, 0.0, 0.49, 0.0);
     //rotate_object_y_local(cube, 45);
     //rotate_object_x_local(cube, 45);
     //rotate_object_z_local(cube, 45);
@@ -1115,22 +1119,22 @@ int main(int argc, char* argv[]) {
                     
                     case SDLK_UP:
                         
-                        step = 0.03;
+                        step = walkspeed;
                     break;
                     
                     case SDLK_DOWN:
                     
-                        step = -0.03;
+                        step = -walkspeed;
                     break;
                     
                     case SDLK_LEFT:
                         
-                        rstep = -2;
+                        rstep = -walkspeed;
                     break;
                     
                     case SDLK_RIGHT:
                     
-                        rstep = 2;
+                        rstep = walkspeed;
                     break;
                     
                     default:
@@ -1156,35 +1160,32 @@ int main(int argc, char* argv[]) {
             }
             
             if(e.type == SDL_MOUSEMOTION) {
-                
-                printf("yrel: %d\n", e.motion.yrel);
-                
-                rstep = e.motion.yrel*5;
-            } else {
-                
-                rstep = 0;
-            }
+                                
+                chg_angle += e.motion.xrel;
+            } 
         }
 
+        frame_start = SDL_GetTicks();
         i += step;
         //translate_object(cube1, 0.0, 0.0, step);
         //rotate_object_y_local(cube1, 1);
         //rotate_object_x_local(cube1, 1);
-        //rotate_object_z_local(cube1, 1);
-        player_angle += rstep;
-        
+        //rotate_object_z_local(cube1, 1);        
+        rotate_object_y_global(cube2, -chg_angle);    
+        translate_object(cube2, -rstep, 0.0, -step);
+        rotate_object_y_global(cube1, -chg_angle);
+        translate_object(cube1, -rstep, 0.0, -step);
+        //rotate_object_x_local(cube2, 1);
+        //rotate_object_z_local(cube2, 1);
+
+        player_angle += chg_angle;
+        chg_angle = 0;
+
         if(player_angle == 360)
             player_angle = 0;
             
         if(player_angle == -1)
             player_angle = 359;
-            
-        translate_object(cube2, 0.0, 0.0, -step);
-        rotate_object_y_global(cube2, -rstep);
-        translate_object(cube1, 0.0, 0.0, -step);
-        rotate_object_y_global(cube1, -rstep);
-        //rotate_object_x_local(cube2, 1);
-        //rotate_object_z_local(cube2, 1);
 
         SDL_SetRenderDrawColor(renderer, 0xFF, 0xFF, 0x00, 0xFF);
         SDL_RenderClear(renderer);
@@ -1196,7 +1197,12 @@ int main(int argc, char* argv[]) {
         //render_triangle(renderer, &test_tri[1]);
         
         SDL_RenderPresent(renderer);
-        SDL_Delay(10);
+        numFrames++;        
+        fps = ( numFrames/(float)(SDL_GetTicks() - startTime) )*1000;
+        sprintf(&title, "LESTER %f FPS", fps);
+        SDL_SetWindowTitle(window, &title);
+        
+        while((SDL_GetTicks() - frame_start) <= 16);
     }
 
     SDL_DestroyRenderer(renderer);
