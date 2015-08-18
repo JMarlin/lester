@@ -437,11 +437,11 @@ void project(vertex* v, screen_point* p) {
 //Draw an rgb-colored line along the scanline from x=x1 to x=x2, interpolating
 //z-values and only drawing the pixel if the interpolated z-value is less than
 //the value already written to the z-buffer
-void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1) {
+void draw_scanline(SDL_Renderer *r, float scanline, float x0, float z0, float x1, float z1) {
 
     unsigned short newz;
-    int z_addr, direction, t;	
-	float dz, dx, m, newz_f, x0_f, x1_f, z0_f, z1_f; 
+    int z_addr;	
+	float dz, dx, m, newz_f, t; 
                  
     //don't draw off the screen
     if(scanline >= SCREEN_HEIGHT || scanline < 0)
@@ -449,31 +449,24 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
       
     if(x0 > x1) {
      
-        x0_f = x1;
-        x1_f = x0;
-        z0_f = z1;
-        z1_f = z0;
         t = x0;
         x0 = x1;
-        x1 = t; 
-    } else {
-        
-        x1_f = x1;
-        x0_f = x0;
-        z1_f = z1;
-        z0_f = z0;
-    }
+        x1 = t;
+        t = z0;
+        z0 = z1;
+        z1 = t;
+    } 
     	    
-	dz = z1_f - z0_f;
-    dx = x1_f - x0_f;
+	dz = z1 - z0;
+    dx = x1 - x0;
     m = dx ? dz/dx : 0;
     z_addr = scanline * SCREEN_WIDTH + x0;
        
-    for(; x0 <= x1; x0_f += 1, x0++, z_addr++) {
+    for(; x0 <= x1; x0 += 1, z_addr++) {
 
         if(x0 < SCREEN_WIDTH && x0 >= 0) {
 
-            newz_f = m*(x0_f - x1_f) + z1_f;
+            newz_f = m*(x0 - x1) + z1;
             newz = (unsigned short)(newz_f >= 65535 ? 65535 : newz_f < 0 ? 0 : newz_f);
             
             //Check the z buffer and draw the point	
@@ -481,7 +474,7 @@ void draw_scanline(SDL_Renderer *r, int scanline, int x0, int z0, int x1, int z1
                 
                     //Uncomment the below to view the depth buffer
                     //SDL_SetRenderDrawColor(r, newz >> 8, newz >> 8, newz >> 8, 0xFF);
-                    SDL_RenderDrawPoint(r, x0, scanline);
+                    SDL_RenderDrawPoint(r, (int)x0, (int)scanline);
                     zbuf[z_addr] = newz;
             }
         }
@@ -542,6 +535,7 @@ void draw_scanline_old(SDL_Renderer *r, int scanline, int x0, int z0, int x1, in
     }
 }
 
+/*
 void draw_triangle(SDL_Renderer *rend, triangle* tri) {
     
     int i;
@@ -868,6 +862,187 @@ void draw_triangle(SDL_Renderer *rend, triangle* tri) {
 		        
 		//Move to the next scanline		
 		current_s++;
+	}
+}
+*/
+
+void draw_triangle(SDL_Renderer *rend, triangle* tri) {
+    
+    int i;
+    screen_point p[3];
+    float vec_a[3];
+    float vec_b[3];
+    float cross[3];
+    float mag;
+    float normal_angle;
+    float lighting_pct;
+    float r, g, b;
+    unsigned char f, s, t, e;
+    float dx_1, dx_2, dx_3, dy_1, dy_2,	dy_3, dz_1, dz_2, dz_3;
+    float mx_1, mx_2, mx_3, mz_1, mz_2, mz_3;
+    float new_x1, new_x2, new_x3, new_z1, new_z2, new_z3;
+    float first_orig_x, first_orig_y, first_orig_z, second_orig_x, second_orig_y, second_orig_z;
+	float current_s;
+    
+    //Don't draw the triangle if it's offscreen
+    if(tri->v[0].z < 0 && tri->v[1].z < 0 && tri->v[2].z < 0)
+        return;
+    
+    //Calculate the surface normal
+    //subtract 3 from 2 and 1, translating it to the origin
+    vec_a[0] = tri->v[0].x - tri->v[2].x;
+    vec_a[1] = tri->v[0].y - tri->v[2].y;
+    vec_a[2] = tri->v[0].z - tri->v[2].z;
+    vec_b[0] = tri->v[1].x - tri->v[2].x;
+    vec_b[1] = tri->v[1].y - tri->v[2].y;
+    vec_b[2] = tri->v[1].z - tri->v[2].z;
+    
+    //calculate the cross product using 1 as vector a and 2 as vector b
+    cross[0] = vec_a[1]*vec_b[2] - vec_a[2]*vec_b[1];
+    cross[1] = vec_a[2]*vec_b[0] - vec_a[0]*vec_b[2];
+    cross[2] = vec_a[0]*vec_b[1] - vec_a[1]*vec_b[0]; 
+    
+    //normalize the result vector
+    mag = sqrt(cross[0]*cross[0] + cross[1]*cross[1] + cross[2]*cross[2]);
+    cross[0] /= mag;
+    cross[1] /= mag;
+    cross[2] /= mag;
+        
+    //Calculate the normal's angle vs the camera view direction
+    normal_angle = acos(-cross[2]);
+    
+    //If the normal is facing away from the camera, don't bother drawing it
+    if(normal_angle >= (3*PI/4)) {
+        
+        return;
+    }
+    
+    //NOTE: We need to do some relatively easy math and clip all triangles to the front and rear planes
+    //should basically be testing each vertex's z component to see if it's less than zero or greater than 
+    //the screen depth and, if so, calculate the intersections of its connecting edges with the respective
+    //planes and create two new vertices at the intersection points. We should then proceed to draw the
+    //two new resultant triangles. 
+    //If two of the three are beyond the same plane, we can replace each with the intersection of their
+    //non-mutual edge and draw a single triangle.
+    //Should be able to do this by performing intersection check on each plane in turn?
+    //We can make this recursive:
+    //begin split_tri (one, two, three)
+    //    count = 0
+    //    check one with back (if out, count++ and mark out) 
+    //    check two with back (if out, count++ and mark out)
+    //    check three with back (if out, count++ and mark out)
+    //    switch count
+    //        1: get new back intersections a and b
+    //           split_tri(a, two, three) //actually make sure we build the right tri
+    //           split_tri(b, two, three) //same note
+    //           return
+    //        2: get new back intersections a and b //different from above for the aforementioned reasons
+    //           split_tri(a, b, three) //same note as always
+    //           return
+    //        0: //do nothing and flow through
+    //    endswitch
+    //    //Could probably shorten this by making two passes at the above while swapping planes
+    //    count = 0
+    //    check one with front (if out, count++ and mark out) 
+    //    check two with front (if out, count++ and mark out)
+    //    check three with front (if out, count++ and mark out)
+    //    switch count
+    //        1: get new front intersections a and b
+    //           split_tri(a, two, three) //actually make sure we build the right tri
+    //           split_tri(b, two, three) //same note
+    //           return
+    //        2: get new front intersections a and b //different from above for the aforementioned reasons
+    //           split_tri(a, b, three) //same note as always
+    //           return
+    //        0: //do nothing and flow through
+    //    endswitch
+    //    //There are no triangles out, so we can pass this one along
+    //    draw_triangle(one, two, three)
+    //end    
+    //
+    //Calculate the shading color based on the first vertex color and the
+    //angle between the camera and the surface normal
+    lighting_pct = 1.0 - (normal_angle/PI);
+    r = (float)tri->v[0].c->r * lighting_pct;
+    r = r > 255.0 ? 255 : r;     
+    g = (float)tri->v[0].c->g * lighting_pct;
+    g = g > 255.0 ? 255 : g;
+    b = (float)tri->v[0].c->b * lighting_pct;
+    b = b > 255.0 ? 255 : b;
+    SDL_SetRenderDrawColor(rend, (unsigned char)r, (unsigned char)g, (unsigned char)b, 0xFF);
+    
+    //Move the vertices from world space to screen space
+    for(i = 0; i < 3; i++) 
+        project(&(tri->v[i]), &p[i]);
+    
+    //sort vertices by ascending y
+    f = 0; s = 1; t = 2;
+    if(p[f].y > p[s].y) {
+        e = s;
+        s = f;
+        f = e;
+    }
+    if(p[s].y > p[t].y) {
+        e = t;
+        t = s;
+        s = e;
+    }
+    if(p[f].y > p[s].y) {
+        e = s;
+        s = f;
+        f = e;
+    }
+                    
+	//Set the important scanlines
+	current_s = p[f].y;
+	dx_1 = p[s].x - p[f].x;
+    dy_1 = p[s].y - p[f].y;
+    dz_1 = p[s].z - p[f].z;
+    dx_2 = p[t].x - p[s].x;
+    dy_2 = p[t].y - p[s].y;
+    dz_2 = p[t].z - p[s].z;
+    dx_3 = p[t].x - p[f].x;
+    dy_3 = p[t].y - p[f].y;
+    dz_3 = p[t].z - p[f].z;
+    mx_1 = dy_1 ? dx_1 / dy_1 : 0;
+    mz_1 = dy_1 ? dz_1 / dy_1 : 0;
+    mx_2 = dy_2 ? dx_2 / dy_2 : 0;
+    mz_2 = dy_2 ? dz_2 / dy_2 : 0;
+    mx_3 = dy_3 ? dx_3 / dy_3 : 0;
+    mz_3 = dy_3 ? dz_3 / dy_3 : 0; 
+    first_orig_x = p[f].x;
+    first_orig_y = p[f].y;
+    first_orig_z = p[f].z;
+    second_orig_x = p[s].x;
+    second_orig_y = p[s].y;
+    second_orig_z = p[s].z;
+	
+	while(current_s < p[t].y) {
+		
+        if(!(current_s >= SCREEN_HEIGHT || current_s < 0)) {
+            
+            new_x3 = mx_3*(current_s - first_orig_y) + first_orig_x;
+            new_z3 = mz_3*(current_s - first_orig_y) + first_orig_z;
+            
+            if(current_s < p[s].y) {
+                
+                new_x1 = mx_1*(current_s - first_orig_y) + first_orig_x;
+                new_z1 = mz_1*(current_s - first_orig_y) + first_orig_z;
+                
+                //Draw the scanline from the first edge to the third 
+                draw_scanline(rend, current_s, new_x1, new_z1, new_x3, new_z3);
+            } else {
+                
+                new_x2 = mx_2*(current_s - second_orig_y) + second_orig_x;
+                new_z2 = mz_2*(current_s - second_orig_y) + second_orig_z;
+                
+                //Draw the scanline from the second edge to the third 
+                draw_scanline(rend, current_s, new_x2, new_z2, new_x3, new_z3);
+            }
+        }
+           
+		//Move to the next scanline		
+		current_s += 1;
 	}
 }
 
@@ -1243,7 +1418,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderClear(renderer);
         clear_zbuf();
         
-        //render_object(renderer, cube1);
+        render_object(renderer, cube1);
         render_object(renderer, cube2);  
         //render_triangle(renderer, &test_tri[0]);
         //render_triangle(renderer, &test_tri[1]);
@@ -1254,7 +1429,7 @@ int main(int argc, char* argv[]) {
         sprintf(&title, "LESTER %f FPS", fps);
         SDL_SetWindowTitle(window, &title);
         
-        //while((SDL_GetTicks() - frame_start) <= 16);
+        //while((SDL_GetTicks() - frame_start) <= 14);
     }
 
     SDL_DestroyRenderer(renderer);
